@@ -31,7 +31,7 @@
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true
 	},
-	"include": ["src/**/*.ts"],
+	"include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
 
 	"$schema": "https://json.schemastore.org/tsconfig"
 }

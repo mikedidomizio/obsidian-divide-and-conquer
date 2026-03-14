@@ -31,6 +31,9 @@ The plugin/snippet exclusion is [regex](https://developer.mozilla.org/en-US/docs
 ## Installation
 The plugin is available via Obsidian's Community Plugin Browser: `Settings` → `Community Plugins` → `Browse` → Search for *"Divide & Conquer"*
 
+## Testing
+User-flow tests should be titled as user actions with context prefixes, for example `Command Palette:` or `Settings Tab:` followed by the expected visible outcome.
+
 ## Bugs
 - Occasionally, for one reason or another (like updating plugins) a refresh won't be triggered by obsidian and the buttons may dissappear. Clicking on the community plugins tab (or appearance if you're in snippets) triggers the refresh and the buttons reappear. You can also close and reoppen settings.
 
