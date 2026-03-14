@@ -4,3 +4,9 @@ node_modules
 # obsidian
 data.json
 main.js
+
+# IDE
+.idea
+
+# coverage
+/coverage
