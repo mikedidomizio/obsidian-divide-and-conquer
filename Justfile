@@ -7,7 +7,7 @@ test_vault := "$HOME/Vaults/main-vault"
 [macos]
 build-and-reload:
     #!/usr/bin/env zsh
-    node .esbuild.mjs
+    npm run build
     cp -f "main.js" "{{ test_vault }}/.obsidian/plugins/obsidian-divide-and-conquer/main.js"
     vault_name=$(basename "{{ test_vault }}")
     open "obsidian://open?vault=$vault_name"
@@ -26,15 +26,15 @@ release:
     node .release.mjs
 
 analyze:
-    node .esbuild.mjs analyze
+    npm run build:analyze
 
 init:
     #!/usr/bin/env zsh
     git config core.hooksPath .githooks
     npm install
-    node .esbuild.mjs
+    npm run build
 
 update-deps:
     #!/usr/bin/env zsh
     npm update
-    node .esbuild.mjs
+    npm run build

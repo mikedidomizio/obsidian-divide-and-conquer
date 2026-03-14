@@ -3,6 +3,11 @@
 	"version": "1.0.2",
 	"description": "An Obsidian plugin that provides commands for bulk enabling/disabling of plugins. Intended for power users with many plugins.",
 	"main": "main.js",
+	"scripts": {
+		"build": "node .esbuild.mjs",
+		"build:production": "npm run build -- production",
+		"build:analyze": "npm run build -- analyze"
+	},
 	"keywords": [],
 	"author": "geoffreysflaminglasersword & Chris Grieser (aka pseudometa)",
 	"license": "MIT",
