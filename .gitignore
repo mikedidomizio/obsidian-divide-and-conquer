@@ -4,6 +4,7 @@ node_modules
 # obsidian
 data.json
 main.js
+dist/
 
 # IDE
 .idea

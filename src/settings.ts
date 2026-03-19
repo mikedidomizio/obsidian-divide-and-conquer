@@ -13,6 +13,7 @@ export interface DACSettings {
     reloadAfterPluginChanges: boolean,
     disabledStates: string;
     snapshots: string;
+    levels: string;
 }
 
 export const DEFAULT_SETTINGS: DACSettings = {
@@ -28,9 +29,10 @@ export const DEFAULT_SETTINGS: DACSettings = {
     reloadAfterPluginChanges: false,
     disabledStates: undefined,
     snapshots: undefined,
+    levels: undefined,
 };
 
-interface  TextAreaArgs { mode: Mode, container: Setting, placeholder?: string, value?: string, disabledArea?:TextAreaComponent }    
+interface  TextAreaArgs { mode: Mode, container: Setting, placeholder?: string, value?: string, disabledArea?:TextAreaComponent }
 
 export class DACSettingsTab extends PluginSettingTab {
     plugin: divideAndConquer;
@@ -168,7 +170,7 @@ export class DACSettingsTab extends PluginSettingTab {
         });
         return ret;
     }
-    
+
     setFilters(mode: Mode, input: string) {
         let f = input?.split('\n').filter(p => p.length);
         switch (mode) {

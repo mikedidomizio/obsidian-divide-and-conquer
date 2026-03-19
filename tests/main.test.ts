@@ -8,6 +8,7 @@
  */
 
 import { vi, describe, it, expect } from "vitest";
+import { Plugin as ObsidianPlugin } from "obsidian";
 
 import divideAndConquer from "../src/main";
 import { DEFAULT_SETTINGS } from "../src/settings";
@@ -425,6 +426,40 @@ describe("Logic guard: getCurrentState history initialisation", () => {
 // ─── loadData / saveData serialisation ───────────────────────────────────────
 
 describe("Logic guard: loadData / saveData serialisation", () => {
+	it("keeps level depth after a save/load round-trip used by reload", async () => {
+		const persisted: Record<string, unknown> = {};
+		const saveSpy = vi
+			.spyOn(ObsidianPlugin.prototype, "saveData")
+			.mockImplementation(async (data: unknown) => {
+				Object.assign(persisted, data as Record<string, unknown>);
+			});
+		const loadSpy = vi
+			.spyOn(ObsidianPlugin.prototype, "loadData")
+			.mockImplementation(async () => ({ ...persisted }));
+
+		try {
+			const beforeReload = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+			(beforeReload.saveData as any).mockRestore();
+
+			beforeReload.level = 4;
+			(beforeReload as any).setMode("snippets");
+			beforeReload.level = 2;
+			(beforeReload as any).setMode("plugins");
+
+			await beforeReload.saveData(false);
+
+			const afterReload = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+			await afterReload.loadData();
+
+			expect(afterReload.level).toBe(4);
+			(afterReload as any).setMode("snippets");
+			expect(afterReload.level).toBe(2);
+		} finally {
+			saveSpy.mockRestore();
+			loadSpy.mockRestore();
+		}
+	});
+
 	it("serialises disabled states and snapshots as JSON for persistence", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.bisect();
@@ -448,6 +483,8 @@ describe("Logic guard: loadData / saveData serialisation", () => {
 						[...plugin["mode2Snapshot"].entries()].map(([mode, set]) => [mode, [...set]]),
 					),
 				);
+			if (plugin["mode2Level"])
+				plugin.settings.levels = JSON.stringify(Object.fromEntries(plugin["mode2Level"].entries()));
 			saved.push(plugin.settings);
 		});
 
@@ -455,8 +492,32 @@ describe("Logic guard: loadData / saveData serialisation", () => {
 
 		expect(saved).toHaveLength(1);
 		expect(typeof saved[0].disabledStates).toBe("string");
+		expect(typeof saved[0].levels).toBe("string");
+		expect(JSON.parse(saved[0].levels)).toHaveProperty("plugins");
 		const parsed = JSON.parse(saved[0].disabledStates);
 		expect(parsed).toHaveProperty("plugins");
+	});
+
+	it("ignores malformed persisted levels and falls back to default level 1", async () => {
+		const persisted: Record<string, unknown> = {
+			...DEFAULT_SETTINGS,
+			levels: JSON.stringify({ plugins: "bad", snippets: 3, unknown: 99 }),
+		};
+
+		const loadSpy = vi
+			.spyOn(ObsidianPlugin.prototype, "loadData")
+			.mockImplementation(async () => ({ ...persisted }));
+
+		try {
+			const plugin = createPlugin([], []);
+			await plugin.loadData();
+
+			expect(plugin.level).toBe(1);
+			(plugin as any).setMode("snippets");
+			expect(plugin.level).toBe(3);
+		} finally {
+			loadSpy.mockRestore();
+		}
 	});
 
 	it("restores disabled-state history and snapshots from persisted JSON", async () => {
@@ -498,6 +559,108 @@ describe("Logic guard: loadData / saveData serialisation", () => {
 		const pluginsSnapshot = plugin["mode2Snapshot"].get("plugins");
 		expect(pluginsSnapshot).toBeDefined();
 		expect(pluginsSnapshot!.has("d")).toBe(true);
+	});
+});
+
+describe("Logic guard: reload command flow", () => {
+	function createOnloadPlugin() {
+		const enabledPlugins = new Set<string>(["a", "b", "c", "d"]);
+		const fakeApp = {
+			plugins: {
+				manifests: {
+					a: makeManifest("a"),
+					b: makeManifest("b"),
+					c: makeManifest("c"),
+					d: makeManifest("d"),
+				},
+				enabledPlugins,
+				enablePluginAndSave: vi.fn(async (id: string) => enabledPlugins.add(id)),
+				disablePluginAndSave: vi.fn(async (id: string) => enabledPlugins.delete(id)),
+				requestSaveConfig: vi.fn(async () => {}),
+				initialize: vi.fn(async () => {}),
+				loadManifests: vi.fn(async () => {}),
+			},
+			customCss: {
+				snippets: [] as string[],
+				enabledSnippets: new Set<string>(),
+				setCssEnabledStatus: vi.fn(),
+				loadSnippets: vi.fn(async () => {}),
+			},
+			commands: { executeCommandById: vi.fn() },
+			workspace: { onLayoutReady: vi.fn() },
+			setting: {
+				settingTabs: [
+					{ id: "community-plugins", display: vi.fn(), containerEl: document.createElement("div") },
+					{ id: "appearance", display: vi.fn(), containerEl: document.createElement("div") },
+				],
+			},
+		};
+
+		const plugin = new divideAndConquer(fakeApp as any, {} as any);
+		const capturedCommands: any[] = [];
+		vi.spyOn(plugin, "addCommand").mockImplementation((command: any) => {
+			capturedCommands.push(command);
+			return command;
+		});
+
+		return { plugin, fakeApp, capturedCommands };
+	}
+
+	it("saves state before scheduling app reload when reload-after-change is enabled", async () => {
+		vi.useFakeTimers();
+		const { plugin, fakeApp, capturedCommands } = createOnloadPlugin();
+		vi.spyOn(plugin, "loadData").mockImplementation(async () => {
+			plugin.settings = { ...DEFAULT_SETTINGS, reloadAfterPluginChanges: true };
+		});
+		const saveSpy = vi.spyOn(plugin, "saveData").mockResolvedValue(undefined);
+
+		try {
+			await plugin.onload();
+			plugin.mode2Refresh.set("plugins", () => {});
+			plugin.mode2Refresh.set("snippets", () => {});
+
+			const pluginBisect = capturedCommands.find((cmd) =>
+				cmd.name.startsWith("Plugin Bisect"),
+			);
+			expect(pluginBisect).toBeDefined();
+
+			await pluginBisect.callback();
+			expect(saveSpy).toHaveBeenCalledWith(false);
+			expect(fakeApp.commands.executeCommandById).not.toHaveBeenCalled();
+
+			await vi.advanceTimersByTimeAsync(2000);
+			expect(fakeApp.commands.executeCommandById).toHaveBeenCalledWith("app:reload");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("does not save or reload when reload-after-change is disabled", async () => {
+		vi.useFakeTimers();
+		const { plugin, fakeApp, capturedCommands } = createOnloadPlugin();
+		vi.spyOn(plugin, "loadData").mockImplementation(async () => {
+			plugin.settings = { ...DEFAULT_SETTINGS, reloadAfterPluginChanges: false };
+		});
+		const saveSpy = vi.spyOn(plugin, "saveData").mockResolvedValue(undefined);
+
+		try {
+			await plugin.onload();
+			plugin.mode2Refresh.set("plugins", () => {});
+			plugin.mode2Refresh.set("snippets", () => {});
+
+			const pluginBisect = capturedCommands.find((cmd) =>
+				cmd.name.startsWith("Plugin Bisect"),
+			);
+			expect(pluginBisect).toBeDefined();
+
+			await pluginBisect.callback();
+			await vi.advanceTimersByTimeAsync(2500);
+
+			expect(saveSpy).not.toHaveBeenCalled();
+			expect(fakeApp.commands.executeCommandById).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

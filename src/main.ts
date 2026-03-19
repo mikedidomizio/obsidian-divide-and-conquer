@@ -118,8 +118,10 @@ export default class divideAndConquer extends Plugin {
 			else new Notice(notic_str);
 		};
 
-		const maybeReload = () => {
-			if (this.settings.reloadAfterPluginChanges) setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
+		const maybeReload = async () => {
+			if (!this.settings.reloadAfterPluginChanges) return;
+			await this.saveData(false);
+			setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
 		};
 
 		const maybeInit = () => {
@@ -171,7 +173,7 @@ export default class divideAndConquer extends Plugin {
 		this.getEnabledFromObsidian = () => {
 			switch (this.mode) {
 				case 'plugins': return this.app.plugins.enabledPlugins;
-				// enabledSnippets can sometimes annoyingly include snippets that were removed without disabling 
+				// enabledSnippets can sometimes annoyingly include snippets that were removed without disabling
 				case 'snippets': return new Set(this.app.customCss.snippets.filter((snippet) => this.app.customCss.enabledSnippets.has(snippet)));
 			}
 		};
@@ -226,6 +228,13 @@ export default class divideAndConquer extends Plugin {
 			(Object.entries(JSON.parse(this.settings.snapshots)) as JSONSetArrayMap)
 				.map(([mode, states]) => [mode, new Set(states)])
 		) : new Map();
+		const parsedLevels = this.settings.levels ? Object.entries(JSON.parse(this.settings.levels)) : [];
+		this.mode2Level = new Map(Modes.map(mode => [mode, 1]));
+		for (const [mode, level] of parsedLevels) {
+			if (!Modes.includes(mode as Mode)) continue;
+			if (typeof level !== "number" || !Number.isFinite(level)) continue;
+			this.mode2Level.set(mode as Mode, level);
+		}
 	}
 
 	public async saveData(restore: boolean = true) {
@@ -238,6 +247,9 @@ export default class divideAndConquer extends Plugin {
 			[...this.mode2Snapshot.entries()].map(([mode, set]) => [mode, [...set]])
 		));
 		else this.settings.snapshots = undefined;
+
+		if (this.mode2Level) this.settings.levels = JSON.stringify(Object.fromEntries(this.mode2Level.entries()));
+		else this.settings.levels = undefined;
 
 		if (restore) await this.restore();
 		await super.saveData(this.settings);
