@@ -4,7 +4,8 @@
 - 2022-02-18	adds Divide and Conquer Snippet commands
 - 2022-02-18	adds divideAndConquerSnippets method
 - 2022-02-06	release 0.3.0
-- 2022-02-06	change to awaits/asyncs for plugin disabling/enabling. + ignore hot reload plugin
+- 2022-02-06	change to awaits/asyncs for plugin disabling/enabling.
+  + ignore hot reload plugin
 - 2022-01-31	release 0.2.1
 - 2022-01-31	switch from app.plugins.enabledPlugins to app.plugins.plugins @kometenstaub
 - 2022-01-29	Merge pull request #1 from claremacrae/patch-1
