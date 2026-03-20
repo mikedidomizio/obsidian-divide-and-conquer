@@ -104,58 +104,12 @@ function createSnippetPlugin(snippetIds: string[], enabledIds: string[]) {
 }
 
 describe("Command Palette: Plugin Bisect Flow", () => {
-	it("Start does NOT change the enabled/disabled state", async () => {
+	it("Start enables one half and disables the other half", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
 		const state = plugin.getEnabledDisabled();
-		expect(state.enabled).toHaveLength(4);
-		expect(state.disabled).toHaveLength(0);
-	});
-
-	it("Start sets isRunning and hasStarted on the session", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		await plugin.startBisect();
-		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.isRunning).toBe(true);
-		expect(session.hasStarted).toBe(true);
-	});
-
-	it("Start captures the enabled state at the time of click into startingEnabled", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "c"]);
-		await plugin.startBisect();
-		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.startingEnabled.has("a")).toBe(true);
-		expect(session.startingEnabled.has("c")).toBe(true);
-		expect(session.startingEnabled.has("b")).toBe(false);
-		expect(session.startingEnabled.has("d")).toBe(false);
-	});
-
-	it("Start sets up candidates and enabledUnderTest without applying state", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		await plugin.startBisect();
-		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.candidates.size).toBe(4);
-		expect(session.enabledUnderTest.size).toBe(2);
-	});
-
-	it("First Yes after Start applies the first-half state", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		await plugin.startBisect();
-		await plugin.answerYes();
-		// answerYes narrows within the first-half candidates only,
-		// so one of those is disabled while the second-half items remain enabled
-		const state = plugin.getEnabledDisabled();
-		expect(state.enabled).toHaveLength(3);
-		expect(state.disabled).toHaveLength(1);
-	});
-
-	it("First No after Start applies the second-half state", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		await plugin.startBisect();
-		await plugin.answerNo();
-		const state = plugin.getEnabledDisabled();
-		expect(state.enabled).toHaveLength(1);
-		expect(state.disabled).toHaveLength(3);
+		expect(state.enabled).toHaveLength(2);
+		expect(state.disabled).toHaveLength(2);
 	});
 
 	it("Yes narrows the candidate set", async () => {
@@ -199,70 +153,15 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(enabled.has("b")).toBe(true);
 		expect(enabled.has("c")).toBe(true);
 	});
-
-	it("Enable All resets hasStarted so the Reset button is hidden", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		await plugin.startBisect();
-		await plugin.enableAll();
-		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.hasStarted).toBe(false);
-		expect(session.startingEnabled.size).toBe(0);
-	});
-});
-
-describe("Reset (startOver)", () => {
-	it("Reset restores the enabled/disabled state from when Start was clicked", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "c"]);
-		await plugin.startBisect();
-		await plugin.answerYes(); // applies a different state
-		await plugin.startOver();
-		const enabled = plugin.getEnabledFromObsidian();
-		expect(enabled.has("a")).toBe(true);
-		expect(enabled.has("c")).toBe(true);
-		expect(enabled.has("b")).toBe(false);
-		expect(enabled.has("d")).toBe(false);
-	});
-
-	it("Reset resets hasStarted, isRunning, and clears session state", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		await plugin.startBisect();
-		await plugin.startOver();
-		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.hasStarted).toBe(false);
-		expect(session.isRunning).toBe(false);
-		expect(session.candidates.size).toBe(0);
-		expect(session.enabledUnderTest.size).toBe(0);
-		expect(session.culpritId).toBeUndefined();
-	});
-
-	it("Reset restores state correctly even after multiple Yes answers", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
-		await plugin.startBisect();
-		await plugin.answerYes();
-		await plugin.answerYes();
-		await plugin.startOver();
-		const enabled = plugin.getEnabledFromObsidian();
-		expect(enabled.has("a")).toBe(true);
-		expect(enabled.has("b")).toBe(true);
-		expect(enabled.has("c")).toBe(false);
-		expect(enabled.has("d")).toBe(false);
-	});
-});
-
-describe("Reset button label", () => {
-	it("getButtonLabel returns 'Reset' for startOver", () => {
-		const plugin = createPlugin([], []);
-		expect((plugin as any).getButtonLabel("startOver")).toBe("Reset");
-	});
 });
 
 describe("Command Palette: CSS Snippet Bisect Flow", () => {
-	it("Start does NOT change the snippet enabled/disabled state", async () => {
+	it("Start splits snippets into enabled and disabled halves", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css", "c.css", "d.css"]);
 		await plugin.startBisect();
 		const state = plugin.getEnabledDisabled();
-		expect(state.enabled).toHaveLength(4);
-		expect(state.disabled).toHaveLength(0);
+		expect(state.enabled).toHaveLength(2);
+		expect(state.disabled).toHaveLength(2);
 	});
 
 	it("No narrows the remaining snippet candidates", async () => {
@@ -283,18 +182,6 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		const enabled = plugin.getEnabledFromObsidian();
 		expect(enabled.has("a.css")).toBe(true);
 		expect(enabled.has("b.css")).toBe(true);
-	});
-
-	it("Reset restores snippet state from when Start was clicked", async () => {
-		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css"]);
-		await plugin.startBisect();
-		await plugin.answerYes();
-		await plugin.startOver();
-		const enabled = plugin.getEnabledFromObsidian();
-		expect(enabled.has("a.css")).toBe(true);
-		expect(enabled.has("b.css")).toBe(true);
-		expect(enabled.has("c.css")).toBe(false);
-		expect(enabled.has("d.css")).toBe(false);
 	});
 });
 

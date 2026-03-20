@@ -19,8 +19,6 @@ interface NameNID {
 
 interface BisectSession {
 	isRunning: boolean;
-	hasStarted: boolean;
-	startingEnabled: Set<string>;
 	candidates: Set<string>;
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
@@ -42,7 +40,6 @@ const snippetCommands: DACCommand[] = [
 
 const UIButtons: DACButton[] = [
 	{ id: "enableAll", tooltip: "Enable all items" },
-	{ id: "startOver", tooltip: "Start over" },
 	{ id: "startBisect", tooltip: "Start bisect" },
 	{ id: "answerYes", tooltip: "Issue still happens" },
 	{ id: "answerNo", tooltip: "Issue does not happen" },
@@ -253,8 +250,6 @@ export default class divideAndConquer extends Plugin {
 		await this.enableItems(allItems.map(item => item.id));
 		const session = this.getSession();
 		session.isRunning = false;
-		session.hasStarted = false;
-		session.startingEnabled = new Set();
 		session.candidates = new Set();
 		session.enabledUnderTest = new Set();
 		session.culpritId = undefined;
@@ -268,10 +263,6 @@ export default class divideAndConquer extends Plugin {
 		}
 
 		const session = this.getSession();
-		if (!session.hasStarted) {
-			session.hasStarted = true;
-			session.startingEnabled = new Set(this.getEnabledFromObsidian());
-		}
 		session.isRunning = true;
 		session.culpritId = undefined;
 		session.candidates = new Set(candidates.map(item => item.id));
@@ -280,6 +271,7 @@ export default class divideAndConquer extends Plugin {
 		if (session.enabledUnderTest.size < 1) {
 			session.enabledUnderTest = new Set([...session.candidates]);
 		}
+		await this.applyTestState(session.candidates, session.enabledUnderTest);
 	}
 
 	public async answerYes() {
@@ -326,27 +318,6 @@ export default class divideAndConquer extends Plugin {
 		session.candidates = new Set(remainingCandidates);
 		session.enabledUnderTest = new Set(this.takeFirstHalf(remainingCandidates));
 		await this.applyTestState(previousCandidates, session.enabledUnderTest);
-	}
-
-	public async startOver() {
-		const session = this.getSession();
-		const toRestore = new Set(session.startingEnabled);
-
-		session.isRunning = false;
-		session.hasStarted = false;
-		session.startingEnabled = new Set();
-		session.candidates = new Set();
-		session.enabledUnderTest = new Set();
-		session.culpritId = undefined;
-
-		const allItems = this.getIncludedSortedItems();
-		for (const item of allItems) {
-			if (toRestore.has(item.id)) {
-				await this.enableItem(item.id);
-			} else {
-				await this.disableItem(item.id);
-			}
-		}
 	}
 
 	public getEnabledDisabled() {
@@ -403,8 +374,6 @@ export default class divideAndConquer extends Plugin {
 		if (!this.mode2Session.has(this.mode)) {
 			const session: BisectSession = {
 				isRunning: false,
-				hasStarted: false,
-				startingEnabled: new Set<string>(),
 				candidates: new Set<string>(),
 				enabledUnderTest: new Set<string>(),
 				culpritId: undefined,
@@ -465,7 +434,6 @@ export default class divideAndConquer extends Plugin {
 	private getButtonLabel(id: keyof divideAndConquer) {
 		switch (id) {
 			case "enableAll": return "Enable All";
-			case "startOver": return "Reset";
 			case "startBisect": return "Start";
 			case "answerYes": return "Yes";
 			case "answerNo": return "No";
@@ -475,32 +443,25 @@ export default class divideAndConquer extends Plugin {
 
 	private updateControlState() {
 		const controls = this.controls;
-		if (controls.length !== 6) return;
+		if (controls.length !== 5) return;
 
-		const enableAll = controls[0] as HTMLButtonElement;
-		const startOver = controls[1] as HTMLButtonElement;
-		const start = controls[2] as HTMLButtonElement;
-		const yes = controls[3] as HTMLButtonElement;
-		const no = controls[4] as HTMLButtonElement;
-		const text = controls[5] as HTMLSpanElement;
+		const start = controls[1] as HTMLButtonElement;
+		const yes = controls[2] as HTMLButtonElement;
+		const no = controls[3] as HTMLButtonElement;
+		const text = controls[4] as HTMLSpanElement;
 
 		const session = this.getSession();
-		const { isRunning, hasStarted } = session;
 
-		enableAll.style.display = hasStarted ? "none" : "";
-		startOver.style.display = hasStarted ? "" : "none";
-		start.style.display = (isRunning || hasStarted) ? "none" : "";
-		yes.style.display = isRunning ? "" : "none";
-		no.style.display = isRunning ? "" : "none";
+		start.style.display = session.isRunning ? "none" : "";
+		yes.style.display = session.isRunning ? "" : "none";
+		no.style.display = session.isRunning ? "" : "none";
 
 		if (session.culpritId) {
 			text.setText(`The ${this.getSingularLabel()} possibly causing issues is: ${this.getDisplayName(session.culpritId)}`);
 			return;
 		}
-		if (!isRunning) {
-			text.setText(hasStarted
-				? `Click Start Over to restore your original ${this.getPluralLabel()} state.`
-				: `Click Start to begin bisecting ${this.getPluralLabel()}.`);
+		if (!session.isRunning) {
+			text.setText(`Click Start to begin bisecting ${this.getPluralLabel()}.`);
 			return;
 		}
 
