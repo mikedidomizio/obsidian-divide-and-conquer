@@ -5,7 +5,7 @@ import { Modes, compose, getSnippetItems, makeArray, queryText, removeSetupDebug
 
 import { around } from 'monkey-around';
 
-var tinycolor = require("tinycolor2");
+const tinycolor = require("tinycolor2");
 
 const CSS_DELAY = 200; // delay after enabling/disabling css to allow for obsidian to relect changes before refreshing
 const RESET_DELAY = 1000; // delay after resetting to allow for obsidian to relect changes before refreshing
@@ -15,7 +15,7 @@ interface DACCommand { id: keyof divideAndConquer; name: string; }
 interface DACButton { id: keyof divideAndConquer; tooltip: string; }
 interface NameNID { name: string; id: string; author?: string; description?: string; }
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 // prettier-ignore
 const pluginCommands: DACCommand[] = [
 	{ id: "reset", 		name: "Plugin Reset - forget the original state and set the current state as the new original state" },
@@ -50,7 +50,7 @@ const icons: [keyof divideAndConquer, string][] = [
 	["reBisect", "flip-vertical"]
 ];
 // prettier-ignore
-/* eslint-enable @typescript-eslint/no-unused-vars */
+ 
 
 
 export default class divideAndConquer extends Plugin {
@@ -112,7 +112,7 @@ export default class divideAndConquer extends Plugin {
 
 		const notice = () => {
 			removeSetupDebugNotice(); // these have no timeout
-			let notic_str = `${this.mode} level:${this.level} `;
+			const notic_str = `${this.mode} level:${this.level} `;
 			if (this.level === 1) new Notice(notic_str + "- Now in the original state");
 			else if (this.level === 0) new Notice(notic_str + "- Enabled All");
 			else new Notice(notic_str);
@@ -212,7 +212,7 @@ export default class divideAndConquer extends Plugin {
 		this.addCommands();
 		// when the workspace is ready, get the computed checkbox colors
 		this.app.workspace.onLayoutReady(() => {
-			let appContainer = document.getElementsByClassName("app-container").item(0) as HTMLDivElement;
+			const appContainer = document.getElementsByClassName("app-container").item(0) as HTMLDivElement;
 			this.enabledColor ??= tinycolor(simpleCalc(appContainer.getCssPropertyValue('--checkbox-color'))).spin(180).toHexString();
 			this.disabledColor ??= tinycolor(this.enabledColor).darken(35).toHexString();
 		});
@@ -256,7 +256,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private addControls() {
-		let container = this.getControlContainer();
+		const container = this.getControlContainer();
 		this.mode2Controls ??= new Map<Mode, HTMLDivElement[]>();
 		if (!this.mode2Controls.has(this.mode)) this.mode2Controls.set(this.mode,
 			[...UIButtons.map(o => new ExtraButtonComponent(container)
@@ -318,7 +318,7 @@ export default class divideAndConquer extends Plugin {
 	public reset() {
 		this.disabledState = this.snapshot = undefined;
 		this.level = 1;
-		let { enabled, disabled } = this.getEnabledDisabled();
+		const { enabled, disabled } = this.getEnabledDisabled();
 		this.disabledState = [new Set(disabled)];
 		this.snapshot = new Set(disabled);
 		this.saveData(false);
@@ -344,11 +344,11 @@ export default class divideAndConquer extends Plugin {
 	public getEnabledDisabled() {
 		// the whole point of using sets is constant time lookup, but js is dumb and does strict object equality with no allowance for custom comparators
 		// with our small data sets, it probably won't hurt performance but this is technically O(n^2)
-		let excluded = [...this.getExcludedItems()];
-		let included = [...this.getAllItems()].filter(item => !excluded.some(i => i.id === item.id))
+		const excluded = [...this.getExcludedItems()];
+		const included = [...this.getAllItems()].filter(item => !excluded.some(i => i.id === item.id))
 			.sort((a, b) => b.name.localeCompare(a.name)) // sort by display name rather than id
 			.map((item) => item.id);
-		let result = {
+		const result = {
 			enabled: included.filter(id => this.getEnabledFromObsidian().has(id)),
 			disabled: included.filter(id => !this.getEnabledFromObsidian().has(id))
 		};
@@ -360,7 +360,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public getExcludedItems(mode?: Mode, outIncluded: boolean = false) {
-		let oldmode = this.mode;
+		const oldmode = this.mode;
 		if (mode) this.setMode(mode);
 		const plugins = [...this.getAllItems()].filter(
 			(p: NameNID) => outIncluded !== this.getFilters().some(
@@ -397,7 +397,7 @@ export default class divideAndConquer extends Plugin {
 
 	getReloadButton(tab?: SettingsTab) {
 		tab ??= this.mode2Tab.get(this.mode);
-		let controls = this.getControlContainer(tab);
+		const controls = this.getControlContainer(tab);
 		return controls.find(`[aria-label="${tab.reloadLabel}"]`) as HTMLDivElement;
 	}
 
@@ -406,13 +406,13 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private createLevelText() {
-		let span = document.createElement("span");
+		const span = document.createElement("span");
 		span.setText(`Level: ${this.level}`);
 		return span;
 	}
 
 	private overrideDisplay(mode: Mode, tab: SettingsTab, old: any) {
-		let plugin = this;
+		const plugin = this;
 		return (function display(...args: any[]) {
 			plugin.setMode(mode);
 			plugin.refreshTab = () => {
@@ -432,15 +432,15 @@ export default class divideAndConquer extends Plugin {
 
 
 	private colorizeIgnoredToggles() {
-		let name2Toggle = this.createToggleMap(this.getItemEls());
+		const name2Toggle = this.createToggleMap(this.getItemEls());
 		// for now, regex filtering is only for plugins
-		let included = new Set([...(this.getIncludedItems())].map(m => m.name));
+		const included = new Set([...(this.getIncludedItems())].map(m => m.name));
 		console.log('included', included, this.getIncludedItems(), name2Toggle);
 
-		for (let [name, toggle] of name2Toggle) {
+		for (const [name, toggle] of name2Toggle) {
 			// if the plugin is filtered by regex settings, we indicate this visually by coloring the toggle
 			if (!included?.has(name)) {
-				let colorToggle = () => {
+				const colorToggle = () => {
 					if (toggle.classList.contains('is-enabled')) toggle.style.backgroundColor = this.enabledColor;
 					else toggle.style.backgroundColor = this.disabledColor;
 				};
@@ -448,7 +448,7 @@ export default class divideAndConquer extends Plugin {
 				toggle.addEventListener('click', colorToggle);
 			}
 
-			let id = [...this.getAllItems()].find(p => p.name == name)?.id;
+			const id = [...this.getAllItems()].find(p => p.name == name)?.id;
 			// if the plugin is in the snapshot, we indicate this visually by outlining
 			if (id && this.snapshot && this.snapshot.has(id)) {
 				toggle.style.outlineOffset = "1px";
@@ -459,11 +459,11 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private createToggleMap(items: Element[]) {
-		let name2Toggle = new Map<string, HTMLDivElement>();
-		for (var i = 0; i < items.length; i++) {
-			let child = items[i];
-			let name = (child.querySelector(".setting-item-name") as HTMLDivElement).innerText;
-			let toggle = (child.querySelector(".setting-item-control")).querySelector('.checkbox-container') as HTMLDivElement;
+		const name2Toggle = new Map<string, HTMLDivElement>();
+		for (let i = 0; i < items.length; i++) {
+			const child = items[i];
+			const name = (child.querySelector(".setting-item-name") as HTMLDivElement).innerText;
+			const toggle = (child.querySelector(".setting-item-control")).querySelector('.checkbox-container') as HTMLDivElement;
 			if (name && toggle)
 				name2Toggle.set(name, toggle);
 		}

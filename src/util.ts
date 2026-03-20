@@ -11,9 +11,9 @@ export function simpleCalc(str: string) {
 }
 
 export function removeSetupDebugNotice() {
-	let notices = document.querySelectorAll('.notice') as NodeListOf<HTMLElement>;
+	const notices = document.querySelectorAll('.notice') as NodeListOf<HTMLElement>;
 	for (let i = 0; i < notices.length; i++) {
-		let notice = notices[i];
+		const notice = notices[i];
 		if (notice?.innerText.includes('plugin setup')) notice.remove();
 	}
 }
@@ -39,7 +39,7 @@ export function makeArray(collection: HTMLCollection) {
 export function getSnippetItems(tab: SettingsTab) {
 	const headings = tab.containerEl.querySelectorAll(".setting-item-heading");
 	const lastHeading = headings[headings.length - 1];
-	let res = Array.from(tab.containerEl.children).filter(
+	const res = Array.from(tab.containerEl.children).filter(
 		(child) => !(child.compareDocumentPosition(lastHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
 	);
 	console.log(res, headings);

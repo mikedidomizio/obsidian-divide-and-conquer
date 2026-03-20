@@ -114,7 +114,7 @@ export class DACSettingsTab extends PluginSettingTab {
             }
             );
 
-        let pluginExclusions = new Setting(containerEl)
+        const pluginExclusions = new Setting(containerEl)
             .setName('Plugin Exclusions')
             .setDesc('Exclude plugins using regex (case insensitive).\nEach new line is a new regex. Plugin ids are used for matching by default. Included plugins are on the left, excluded on the right. ');
         this.addTextArea({
@@ -125,7 +125,7 @@ export class DACSettingsTab extends PluginSettingTab {
             disabledArea: this.addTextArea({ mode: 'plugins', container: pluginExclusions })
         });
 
-        let snippetExclusions = new Setting(containerEl)
+        const snippetExclusions = new Setting(containerEl)
             .setName('Snippet Exclusions')
             .setDesc('Exclude snippets using regex (case insensitive).\nEach new line is a new regex. Snippet are only exclude by their name.');
         this.addTextArea({
@@ -144,7 +144,7 @@ export class DACSettingsTab extends PluginSettingTab {
 
     addTextArea({ mode, container, placeholder, value, disabledArea }: TextAreaArgs) {
         let ret: TextAreaComponent;
-        let reset = (area: TextAreaComponent, mode: Mode) => {
+        const reset = (area: TextAreaComponent, mode: Mode) => {
             this.plugin.saveData();
             area.setPlaceholder(
                 [...(this.plugin.getIncludedItems(mode))].map(p => p.name).join('\n')
@@ -172,7 +172,7 @@ export class DACSettingsTab extends PluginSettingTab {
     }
 
     setFilters(mode: Mode, input: string) {
-        let f = input?.split('\n').filter(p => p.length);
+        const f = input?.split('\n').filter(p => p.length);
         switch (mode) {
             case 'plugins': this.plugin.settings.pluginFilterRegexes = f; break;
             case 'snippets': this.plugin.settings.snippetFilterRegexes = f; break;

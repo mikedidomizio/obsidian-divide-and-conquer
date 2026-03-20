@@ -58,6 +58,10 @@ User-flow tests should be titled as user actions with context prefixes, for
 example `Command Palette:` or `Settings Tab:` followed by the expected visible
 outcome.
 
+## Development
+- `npm run lint` — run all configured lint checks.
+- `npm run lint:fix` — run all configured lint checks and apply available auto-fixes.
+
 ## Bugs
 - Occasionally, for one reason or another (like updating plugins) a refresh
   won't be triggered by obsidian and the buttons may dissappear. Clicking on
