@@ -22,6 +22,7 @@ interface BisectSession {
 	candidates: Set<string>;
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
+	enabledBeforeBisect: Set<string> | undefined;
 }
 
 const pluginCommands: DACCommand[] = [
@@ -248,11 +249,22 @@ export default class divideAndConquer extends Plugin {
 	public async enableAll() {
 		const allItems = this.getAllSortedItems();
 		await this.enableItems(allItems.map(item => item.id));
+		this.clearSession(this.getSession());
+	}
+
+	public async resetBisect() {
 		const session = this.getSession();
-		session.isRunning = false;
-		session.candidates = new Set();
-		session.enabledUnderTest = new Set();
-		session.culpritId = undefined;
+		const enabledBeforeBisect = session.enabledBeforeBisect;
+
+		if (enabledBeforeBisect) {
+			const allIds = this.getAllSortedItems().map(item => item.id);
+			const toEnable = allIds.filter(id => enabledBeforeBisect.has(id));
+			const toDisable = allIds.filter(id => !enabledBeforeBisect.has(id));
+			await this.enableItems(toEnable);
+			await this.disableItems(toDisable);
+		}
+
+		this.clearSession(session);
 	}
 
 	public async startBisect() {
@@ -265,6 +277,7 @@ export default class divideAndConquer extends Plugin {
 		const session = this.getSession();
 		session.isRunning = true;
 		session.culpritId = undefined;
+		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
 		session.candidates = new Set(candidates.map(item => item.id));
 		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
 
@@ -377,10 +390,19 @@ export default class divideAndConquer extends Plugin {
 				candidates: new Set<string>(),
 				enabledUnderTest: new Set<string>(),
 				culpritId: undefined,
+				enabledBeforeBisect: undefined,
 			};
 			this.mode2Session.set(this.mode, session);
 		}
 		return this.mode2Session.get(this.mode) as BisectSession;
+	}
+
+	private clearSession(session: BisectSession) {
+		session.isRunning = false;
+		session.candidates = new Set();
+		session.enabledUnderTest = new Set();
+		session.culpritId = undefined;
+		session.enabledBeforeBisect = undefined;
 	}
 
 	private getPluralLabel() {
@@ -433,7 +455,7 @@ export default class divideAndConquer extends Plugin {
 
 	private getButtonLabel(id: keyof divideAndConquer) {
 		switch (id) {
-			case "enableAll": return "Enable All";
+			case "enableAll": return this.getSession().isRunning ? "Reset" : "Enable All";
 			case "startBisect": return "Start";
 			case "answerYes": return "Yes";
 			case "answerNo": return "No";
@@ -441,16 +463,24 @@ export default class divideAndConquer extends Plugin {
 		}
 	}
 
+	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
+		if (id === "enableAll" && this.getSession().isRunning) return "resetBisect";
+		return id;
+	}
+
 	private updateControlState() {
 		const controls = this.controls;
 		if (controls.length !== 5) return;
 
+		const primary = controls[0] as HTMLButtonElement;
 		const start = controls[1] as HTMLButtonElement;
 		const yes = controls[2] as HTMLButtonElement;
 		const no = controls[3] as HTMLButtonElement;
 		const text = controls[4] as HTMLSpanElement;
 
 		const session = this.getSession();
+		primary.setText(this.getButtonLabel("enableAll"));
+		primary.ariaLabel = session.isRunning ? "Reset bisect and restore previous states" : "Enable all items";
 
 		start.style.display = session.isRunning ? "none" : "";
 		yes.style.display = session.isRunning ? "" : "none";
@@ -512,6 +542,6 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private wrapCall(mode: Mode, key: keyof divideAndConquer) {
-		return this.mode2Call.get(mode)?.(this[key] as Func);
+		return this.mode2Call.get(mode)?.(this[this.getButtonAction(key)] as Func);
 	}
 }

@@ -153,6 +153,28 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(enabled.has("b")).toBe(true);
 		expect(enabled.has("c")).toBe(true);
 	});
+
+	it("Reset restores plugin states from before bisect started", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "c"]);
+		await plugin.startBisect();
+
+		expect((plugin as any).getButtonLabel("enableAll")).toBe("Reset");
+		await plugin.resetBisect();
+
+		const enabled = plugin.getEnabledFromObsidian();
+		expect(enabled.has("a")).toBe(true);
+		expect(enabled.has("b")).toBe(false);
+		expect(enabled.has("c")).toBe(true);
+		expect(enabled.has("d")).toBe(false);
+
+		const session = plugin.mode2Session.get("plugins")!;
+		expect(session.isRunning).toBe(false);
+		expect(session.candidates.size).toBe(0);
+		expect(session.enabledUnderTest.size).toBe(0);
+		expect(session.culpritId).toBeUndefined();
+		expect(session.enabledBeforeBisect).toBeUndefined();
+		expect((plugin as any).getButtonLabel("enableAll")).toBe("Enable All");
+	});
 });
 
 describe("Command Palette: CSS Snippet Bisect Flow", () => {
@@ -182,6 +204,23 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		const enabled = plugin.getEnabledFromObsidian();
 		expect(enabled.has("a.css")).toBe(true);
 		expect(enabled.has("b.css")).toBe(true);
+	});
+
+	it("Reset restores snippet states from before bisect started", async () => {
+		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css"], ["b.css"]);
+		await plugin.startBisect();
+		await plugin.resetBisect();
+
+		const enabled = plugin.getEnabledFromObsidian();
+		expect(enabled.has("a.css")).toBe(false);
+		expect(enabled.has("b.css")).toBe(true);
+		expect(enabled.has("c.css")).toBe(false);
+
+		const session = plugin.mode2Session.get("snippets")!;
+		expect(session.isRunning).toBe(false);
+		expect(session.candidates.size).toBe(0);
+		expect(session.enabledUnderTest.size).toBe(0);
+		expect(session.enabledBeforeBisect).toBeUndefined();
 	});
 });
 
