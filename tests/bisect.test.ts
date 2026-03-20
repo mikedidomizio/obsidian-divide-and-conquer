@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { Plugin } from "obsidian";
 import divideAndConquer from "../src/main";
 import { DEFAULT_SETTINGS } from "../src/settings";
 
@@ -295,6 +296,109 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		expect(enabled.has("b.css")).toBe(true);
 		expect(enabled.has("c.css")).toBe(false);
 		expect(enabled.has("d.css")).toBe(false);
+	});
+});
+
+describe("Session persistence across reloads", () => {
+	/** Helper: capture what saveData would write to disk. */
+	async function captureSave(plugin: divideAndConquer): Promise<any> {
+		let captured: any;
+		vi.spyOn(Plugin.prototype, "saveData").mockImplementationOnce(async (data: any) => {
+			captured = data;
+		});
+		await plugin.saveData();
+		return captured;
+	}
+
+	/** Helper: restore a plugin from previously captured disk data. */
+	async function restorePlugin(savedData: any, pluginIds: string[], enabledIds: string[]): Promise<divideAndConquer> {
+		const plugin2 = createPlugin(pluginIds, enabledIds);
+		vi.spyOn(Plugin.prototype, "loadData").mockImplementationOnce(async () => savedData);
+		await plugin2.loadData();
+		return plugin2;
+	}
+
+	it("saveData writes bisectSessions to the persisted payload", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		await plugin.startBisect();
+		const saved = await captureSave(plugin);
+		expect(saved.bisectSessions).toBeDefined();
+		expect(saved.bisectSessions["plugins"]).toBeDefined();
+	});
+
+	it("session isRunning and hasStarted survive a reload", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		await plugin.startBisect();
+		const saved = await captureSave(plugin);
+		const plugin2 = await restorePlugin(saved, ["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		const session = plugin2.mode2Session.get("plugins")!;
+		expect(session.isRunning).toBe(true);
+		expect(session.hasStarted).toBe(true);
+	});
+
+	it("startingEnabled is restored correctly after reload", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "c"]);
+		await plugin.startBisect();
+		const saved = await captureSave(plugin);
+		const plugin2 = await restorePlugin(saved, ["a", "b", "c", "d"], ["a", "c"]);
+		const session = plugin2.mode2Session.get("plugins")!;
+		expect(session.startingEnabled.has("a")).toBe(true);
+		expect(session.startingEnabled.has("c")).toBe(true);
+		expect(session.startingEnabled.has("b")).toBe(false);
+		expect(session.startingEnabled.has("d")).toBe(false);
+	});
+
+	it("candidates and enabledUnderTest are restored after reload", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		await plugin.startBisect();
+		const originalSession = plugin.mode2Session.get("plugins")!;
+		const saved = await captureSave(plugin);
+		const plugin2 = await restorePlugin(saved, ["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		const session = plugin2.mode2Session.get("plugins")!;
+		expect(session.candidates.size).toBe(originalSession.candidates.size);
+		expect(session.enabledUnderTest.size).toBe(originalSession.enabledUnderTest.size);
+		expect([...session.candidates]).toEqual(expect.arrayContaining([...originalSession.candidates]));
+		expect([...session.enabledUnderTest]).toEqual(expect.arrayContaining([...originalSession.enabledUnderTest]));
+	});
+
+	it("mid-bisect session (after Yes) is fully restored after reload", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		await plugin.startBisect();
+		await plugin.answerYes();
+		const saved = await captureSave(plugin);
+		const plugin2 = await restorePlugin(saved, ["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		const session = plugin2.mode2Session.get("plugins")!;
+		expect(session.isRunning).toBe(true);
+		expect(session.hasStarted).toBe(true);
+		expect(session.candidates.size).toBe(2);
+		expect(session.enabledUnderTest.size).toBe(1);
+	});
+
+	it("culpritId is restored after reload", async () => {
+		const plugin = createPlugin(["a", "b"], ["a", "b"]);
+		await plugin.startBisect();
+		await plugin.answerYes(); // with 2 items, this finds the culprit
+		const saved = await captureSave(plugin);
+		const plugin2 = await restorePlugin(saved, ["a", "b"], ["a", "b"]);
+		const session = plugin2.mode2Session.get("plugins")!;
+		expect(session.isRunning).toBe(false);
+		expect(typeof session.culpritId).toBe("string");
+	});
+
+	it("settings are still loaded correctly alongside bisectSessions", async () => {
+		const plugin = createPlugin(["a", "b"], ["a", "b"]);
+		plugin.settings.reloadAfterPluginChanges = true;
+		await plugin.startBisect();
+		const saved = await captureSave(plugin);
+		const plugin2 = await restorePlugin(saved, ["a", "b"], ["a", "b"]);
+		expect(plugin2.settings.reloadAfterPluginChanges).toBe(true);
+	});
+
+	it("loading data with no bisectSessions (fresh install) does not throw", async () => {
+		const plugin = createPlugin(["a", "b"], ["a", "b"]);
+		vi.spyOn(Plugin.prototype, "loadData").mockImplementationOnce(async () => ({}));
+		await expect(plugin.loadData()).resolves.not.toThrow();
+		expect(plugin.mode2Session.size).toBe(0);
 	});
 });
 
