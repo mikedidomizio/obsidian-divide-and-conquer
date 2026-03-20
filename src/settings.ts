@@ -57,7 +57,7 @@ export class DACSettingsTab extends PluginSettingTab {
             .addToggle((toggle) => toggle.setValue(this.plugin.settings.initializeAfterPluginChanges)
                     .onChange(async (value) => {
                         this.plugin.settings.initializeAfterPluginChanges = value;
-                        await this.plugin.saveData(false);
+                    await this.plugin.saveData();
                     })
             );
 
@@ -66,13 +66,13 @@ export class DACSettingsTab extends PluginSettingTab {
             .addToggle((toggle) => toggle.setValue(this.plugin.settings.reloadAfterPluginChanges)
                     .onChange(async (value) => {
                         this.plugin.settings.reloadAfterPluginChanges = value;
-                        await this.plugin.saveData(false);
+                    await this.plugin.saveData();
                     })
             );
         containerEl.createEl('hr').createEl('br');
 
 
-        containerEl.createEl('h3', { text: 'Changing any of the following settings will restore plugins to the original state.' });
+            containerEl.createEl('h3', { text: 'Changes below affect filtering and bisect candidate selection.' });
 
         new Setting(containerEl)
             .setName('Use Filters on Plugin Display Names')

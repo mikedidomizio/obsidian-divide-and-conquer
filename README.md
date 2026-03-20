@@ -26,16 +26,14 @@ plugins, to make the power user's life easier.
 
 ## Commands Added
 For either Plugin/Snippet:
-- Reset - save the current state as the 'original state' (level 1)
-- Restore - return to the original state*
-- Bisect - Disable half of the active items, or if all are active (you're at
-  'level 0') return to the original state (level 1)
-- Un-Bisect - Undo the last bisection, or enable all plugins if in the original state
-- Re-Bisect - Undo the last bisection, then disable the other half
+- Enable All - enable every plugin/snippet
+- Bisect Start - begin the bisect process by enabling one half and disabling the other
+- Bisect Yes - issue is still present with the currently enabled half; keep narrowing this side
+- Bisect No - issue is not present with the currently enabled half; switch to the opposite side
 
-\* ***After Resetting, DAC won't enable any plugins that you disable manually.
-Restoring only enables plugins that DAC disabled, and disables any that were
-already disabled when you last reset***
+When only one possibility remains, DAC shows:
+`The plugin possibly causing issues is: ...`
+(or `CSS snippet` in snippet mode), then shows `Start` again.
 
 (Note that to be able to fulfill its duty, this plugin will never disable
 itself. The Hot Reload Plugin will also never be disabled, to avoid
@@ -54,9 +52,9 @@ The plugin is available via Obsidian's Community Plugin Browser:
 *"Divide & Conquer"*
 
 ## Testing
-User-flow tests should be titled as user actions with context prefixes, for
-example `Command Palette:` or `Settings Tab:` followed by the expected visible
-outcome.
+- `tests/bisect.test.ts` covers the bisect user flow (`Start`, `Yes`, `No`, `Enable All`) for plugins and CSS snippets.
+- `tests/util.test.ts` covers utility behavior and UI-adjacent helper logic.
+- Prefer user-visible test names that read like actions and outcomes.
 
 ## Development
 - `npm run lint` — run all configured lint checks.
