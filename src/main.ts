@@ -26,15 +26,6 @@ interface BisectSession {
 	culpritId: string | undefined;
 }
 
-interface SerializedBisectSession {
-	isRunning: boolean;
-	hasStarted: boolean;
-	startingEnabled: string[];
-	candidates: string[];
-	enabledUnderTest: string[];
-	culpritId: string | undefined;
-}
-
 const pluginCommands: DACCommand[] = [
 	{ id: "enableAll", name: "Plugin Enable All - enable every installed plugin" },
 	{ id: "startBisect", name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half" },
@@ -216,36 +207,11 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public override async loadData() {
-		const raw = (await super.loadData()) ?? {};
-		const { bisectSessions, ...settingsData } = raw;
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, settingsData);
-		if (bisectSessions) {
-			for (const [mode, s] of Object.entries(bisectSessions) as [Mode, SerializedBisectSession][]) {
-				this.mode2Session.set(mode, {
-					isRunning: s.isRunning ?? false,
-					hasStarted: s.hasStarted ?? false,
-					startingEnabled: new Set(s.startingEnabled ?? []),
-					candidates: new Set(s.candidates ?? []),
-					enabledUnderTest: new Set(s.enabledUnderTest ?? []),
-					culpritId: s.culpritId,
-				});
-			}
-		}
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await super.loadData());
 	}
 
 	public override async saveData() {
-		const bisectSessions: Record<string, SerializedBisectSession> = {};
-		for (const [mode, session] of this.mode2Session.entries()) {
-			bisectSessions[mode] = {
-				isRunning: session.isRunning,
-				hasStarted: session.hasStarted,
-				startingEnabled: [...session.startingEnabled],
-				candidates: [...session.candidates],
-				enabledUnderTest: [...session.enabledUnderTest],
-				culpritId: session.culpritId,
-			};
-		}
-		await super.saveData({ ...this.settings, bisectSessions });
+		await super.saveData(this.settings);
 	}
 
 	private addControls() {
