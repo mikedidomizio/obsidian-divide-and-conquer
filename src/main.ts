@@ -1,6 +1,6 @@
 import { Command, Notice, Plugin, SettingsTab } from "obsidian";
 import type { Composed, Func, Mode } from "./util";
-import { DACSettingsTab, DEFAULT_SETTINGS } from "./settings";
+import { DACSettingsTab, DEFAULT_SETTINGS, type PersistedBisectSession } from "./settings";
 import { Modes, compose, getSnippetItems, makeArray, queryText, removeSetupDebugNotice, simpleCalc } from "./util";
 import { around } from "monkey-around";
 
@@ -23,6 +23,7 @@ interface BisectSession {
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
 	enabledBeforeBisect: Set<string> | undefined;
+	awaitingInitialAnswer: boolean;
 }
 
 const pluginCommands: DACCommand[] = [
@@ -49,6 +50,7 @@ const UIButtons: DACButton[] = [
 export default class divideAndConquer extends Plugin {
 	settings!: typeof DEFAULT_SETTINGS;
 	manifests = this.app.plugins.manifests;
+	private skipNextReload = false;
 	enabledColor: string | null = null;
 	disabledColor: string | null = null;
 	getItemEls!: () => Element[];
@@ -92,6 +94,7 @@ export default class divideAndConquer extends Plugin {
 		};
 
 		const maybeReload = async () => {
+			if (this.consumeReloadSkipToken()) return;
 			if (!this.settings.reloadAfterPluginChanges) return;
 			await this.saveData();
 			setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
@@ -206,6 +209,7 @@ export default class divideAndConquer extends Plugin {
 
 	public override async loadData() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await super.loadData());
+		this.settings.bisectSessions ??= {};
 	}
 
 	public override async saveData() {
@@ -250,6 +254,7 @@ export default class divideAndConquer extends Plugin {
 		const allItems = this.getAllSortedItems();
 		await this.enableItems(allItems.map(item => item.id));
 		this.clearSession(this.getSession());
+		await this.persistSession();
 	}
 
 	public async resetBisect() {
@@ -265,6 +270,7 @@ export default class divideAndConquer extends Plugin {
 		}
 
 		this.clearSession(session);
+		await this.persistSession();
 	}
 
 	public async startBisect() {
@@ -279,12 +285,13 @@ export default class divideAndConquer extends Plugin {
 		session.culpritId = undefined;
 		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
 		session.candidates = new Set(candidates.map(item => item.id));
-		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
-
-		if (session.enabledUnderTest.size < 1) {
-			session.enabledUnderTest = new Set([...session.candidates]);
-		}
-		await this.applyTestState(session.candidates, session.enabledUnderTest);
+		session.enabledUnderTest = new Set(
+			[...session.candidates].filter(id => session.enabledBeforeBisect?.has(id)),
+		);
+		session.awaitingInitialAnswer = true;
+		// Starting bisect from settings should not immediately reload Obsidian.
+		this.skipNextReload = true;
+		await this.persistSession();
 	}
 
 	public async answerYes() {
@@ -294,15 +301,26 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 
+		if (session.awaitingInitialAnswer) {
+			session.awaitingInitialAnswer = false;
+			if (session.enabledUnderTest.size < 1) {
+				new Notice(`No enabled ${this.getPluralLabel()} to test.`);
+				await this.persistSession();
+				return;
+			}
+		}
+
 		if (session.enabledUnderTest.size === 1) {
 			session.culpritId = [...session.enabledUnderTest][0];
 			session.isRunning = false;
+			await this.persistSession();
 			return;
 		}
 
 		session.candidates = new Set(session.enabledUnderTest);
 		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
 		await this.applyTestState(session.candidates, session.enabledUnderTest);
+		await this.persistSession();
 	}
 
 	public async answerNo() {
@@ -311,11 +329,14 @@ export default class divideAndConquer extends Plugin {
 			new Notice("Start bisect before answering.");
 			return;
 		}
+		session.awaitingInitialAnswer = false;
 
 		const previousCandidates = new Set(session.candidates);
 		const remainingCandidates = [...session.candidates].filter(id => !session.enabledUnderTest.has(id));
 		if (remainingCandidates.length < 1) {
-			new Notice("No alternate group left to test.");
+			this.clearSession(session);
+			await this.persistSession();
+			new Notice("No alternate group left to test. Bisect stopped.");
 			return;
 		}
 
@@ -325,12 +346,14 @@ export default class divideAndConquer extends Plugin {
 			session.culpritId = remainingCandidates[0];
 			session.isRunning = false;
 			await this.applyTestState(previousCandidates, session.enabledUnderTest);
+			await this.persistSession();
 			return;
 		}
 
 		session.candidates = new Set(remainingCandidates);
 		session.enabledUnderTest = new Set(this.takeFirstHalf(remainingCandidates));
 		await this.applyTestState(previousCandidates, session.enabledUnderTest);
+		await this.persistSession();
 	}
 
 	public getEnabledDisabled() {
@@ -385,16 +408,63 @@ export default class divideAndConquer extends Plugin {
 
 	private getSession() {
 		if (!this.mode2Session.has(this.mode)) {
-			const session: BisectSession = {
+			const session = this.deserializeSession(this.settings.bisectSessions?.[this.mode]);
+			this.mode2Session.set(this.mode, session);
+		}
+		return this.mode2Session.get(this.mode) as BisectSession;
+	}
+
+	private deserializeSession(session?: PersistedBisectSession): BisectSession {
+		if (!session) {
+			return {
 				isRunning: false,
 				candidates: new Set<string>(),
 				enabledUnderTest: new Set<string>(),
 				culpritId: undefined,
 				enabledBeforeBisect: undefined,
+				awaitingInitialAnswer: false,
 			};
-			this.mode2Session.set(this.mode, session);
 		}
-		return this.mode2Session.get(this.mode) as BisectSession;
+
+		return {
+			isRunning: session.isRunning,
+			candidates: new Set(session.candidates ?? []),
+			enabledUnderTest: new Set(session.enabledUnderTest ?? []),
+			culpritId: session.culpritId,
+			enabledBeforeBisect: session.enabledBeforeBisect ? new Set(session.enabledBeforeBisect) : undefined,
+			awaitingInitialAnswer: session.awaitingInitialAnswer,
+		};
+	}
+
+	private serializeSession(session: BisectSession): PersistedBisectSession {
+		return {
+			isRunning: session.isRunning,
+			candidates: [...session.candidates],
+			enabledUnderTest: [...session.enabledUnderTest],
+			culpritId: session.culpritId,
+			enabledBeforeBisect: session.enabledBeforeBisect ? [...session.enabledBeforeBisect] : undefined,
+			awaitingInitialAnswer: session.awaitingInitialAnswer,
+		};
+	}
+
+	private isSessionEmpty(session: BisectSession) {
+		return !session.isRunning
+			&& session.candidates.size < 1
+			&& session.enabledUnderTest.size < 1
+			&& !session.culpritId
+			&& !session.enabledBeforeBisect
+			&& !session.awaitingInitialAnswer;
+	}
+
+	private async persistSession(mode: Mode = this.mode) {
+		const session = this.mode2Session.get(mode);
+		if (!session) return;
+
+		const persisted = { ...(this.settings.bisectSessions ?? {}) };
+		if (this.isSessionEmpty(session)) delete persisted[mode];
+		else persisted[mode] = this.serializeSession(session);
+		this.settings.bisectSessions = persisted;
+		await this.saveData();
 	}
 
 	private clearSession(session: BisectSession) {
@@ -403,6 +473,13 @@ export default class divideAndConquer extends Plugin {
 		session.enabledUnderTest = new Set();
 		session.culpritId = undefined;
 		session.enabledBeforeBisect = undefined;
+		session.awaitingInitialAnswer = false;
+	}
+
+	private consumeReloadSkipToken() {
+		if (!this.skipNextReload) return false;
+		this.skipNextReload = false;
+		return true;
 	}
 
 	private getPluralLabel() {
@@ -492,6 +569,10 @@ export default class divideAndConquer extends Plugin {
 		}
 		if (!session.isRunning) {
 			text.setText(`Click Start to begin bisecting ${this.getPluralLabel()}.`);
+			return;
+		}
+		if (session.awaitingInitialAnswer) {
+			text.setText(`No changes yet. With your current ${this.getPluralLabel()} state, are you still having issues?`);
 			return;
 		}
 
