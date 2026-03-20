@@ -8,7 +8,7 @@ const tinycolor = require("tinycolor2");
 
 const CSS_DELAY = 200;
 
-interface DACCommand { id: keyof divideAndConquer; name: string; }
+interface DACCommand { id: string; method: keyof divideAndConquer; name: string; }
 interface DACButton { id: keyof divideAndConquer; tooltip: string; }
 interface NameNID {
 	name: string;
@@ -27,17 +27,17 @@ interface BisectSession {
 }
 
 const pluginCommands: DACCommand[] = [
-	{ id: "enableAll", name: "Plugin Enable All - enable every installed plugin" },
-	{ id: "startBisect", name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half" },
-	{ id: "answerYes", name: "Plugin Bisect Yes - issue still happens with the currently enabled plugins" },
-	{ id: "answerNo", name: "Plugin Bisect No - issue does not happen with the currently enabled plugins" },
+	{ id: "plugin-enable-all", method: "enableAll", name: "Plugin Enable All - enable every installed plugin" },
+	{ id: "plugin-start-bisect", method: "startBisect", name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half" },
+	{ id: "plugin-answer-yes", method: "answerYes", name: "Plugin Bisect Yes - issue still happens with the currently enabled plugins" },
+	{ id: "plugin-answer-no", method: "answerNo", name: "Plugin Bisect No - issue does not happen with the currently enabled plugins" },
 ];
 
 const snippetCommands: DACCommand[] = [
-	{ id: "enableAll", name: "Snippet Enable All - enable every installed CSS snippet" },
-	{ id: "startBisect", name: "Snippet Bisect Start - begin troubleshooting by splitting CSS snippets in half" },
-	{ id: "answerYes", name: "Snippet Bisect Yes - issue still happens with the currently enabled CSS snippets" },
-	{ id: "answerNo", name: "Snippet Bisect No - issue does not happen with the currently enabled CSS snippets" },
+	{ id: "snippet-start-bisect", method: "startBisect", name: "Snippet Bisect Start - begin troubleshooting by splitting CSS snippets in half" },
+	{ id: "snippet-answer-yes", method: "answerYes", name: "Snippet Bisect Yes - issue still happens with the currently enabled CSS snippets" },
+	{ id: "snippet-answer-no", method: "answerNo", name: "Snippet Bisect No - issue does not happen with the currently enabled CSS snippets" },
+	{ id: "snippet-enable-all", method: "enableAll", name: "Snippet Enable All - enable every installed CSS snippet" },
 ];
 
 const UIButtons: DACButton[] = [
@@ -241,12 +241,19 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private addCommands() {
-		type PC = Partial<Command>;
 		for (const command of pluginCommands) {
-			this.addCommand(Object.assign(command, { callback: this.mode2Call.get("plugins")?.(this[command.id] as Func) } as PC));
+			this.addCommand({
+				id: command.id,
+				name: command.name,
+				callback: this.mode2Call.get("plugins")?.(this[command.method] as Func),
+			});
 		}
 		for (const command of snippetCommands) {
-			this.addCommand(Object.assign(command, { callback: this.mode2Call.get("snippets")?.(this[command.id] as Func) } as PC));
+			this.addCommand({
+				id: command.id,
+				name: command.name,
+				callback: this.mode2Call.get("snippets")?.(this[command.method] as Func),
+			});
 		}
 	}
 

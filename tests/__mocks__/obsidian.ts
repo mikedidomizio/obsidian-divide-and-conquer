@@ -7,6 +7,7 @@ export class Notice {
 export class Plugin {
 	app: any;
 	manifest: any;
+	registeredCommands: any[] = [];
 
 	constructor(app: any, manifest?: any) {
 		this.app = app;
@@ -20,6 +21,7 @@ export class Plugin {
 	async saveData(_data: any): Promise<void> {}
 
 	addCommand(command: any) {
+		this.registeredCommands.push(command);
 		return command;
 	}
 
