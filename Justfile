@@ -22,6 +22,9 @@ check-all:
 check-tsc-qf:
     npx tsc --noEmit --skipLibCheck --strict && echo "Typescript OK"
 
+check-eslint:
+    npm run lint && echo "ESLint OK"
+
 release:
     node .release.mjs
 
