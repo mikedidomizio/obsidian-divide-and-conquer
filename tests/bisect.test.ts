@@ -121,12 +121,18 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.enabledUnderTest.size).toBe(1);
 	});
 
-	it("No switches to the opposite half", async () => {
+	it("No eliminates the current half and keeps bisecting", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
 		const before = new Set(plugin.mode2Session.get("plugins")!.enabledUnderTest);
 		await plugin.answerNo();
-		const after = plugin.mode2Session.get("plugins")!.enabledUnderTest;
+		const session = plugin.mode2Session.get("plugins")!;
+		const after = session.enabledUnderTest;
+		const state = plugin.getEnabledDisabled();
+		expect(session.candidates.size).toBe(2);
+		expect(session.enabledUnderTest.size).toBe(1);
+		expect(state.enabled).toHaveLength(1);
+		expect(state.disabled).toHaveLength(3);
 		expect([...after].some((id) => before.has(id))).toBe(false);
 	});
 
@@ -156,6 +162,18 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		const state = plugin.getEnabledDisabled();
 		expect(state.enabled).toHaveLength(2);
 		expect(state.disabled).toHaveLength(2);
+	});
+
+	it("No narrows the remaining snippet candidates", async () => {
+		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css", "c.css", "d.css"]);
+		await plugin.startBisect();
+		await plugin.answerNo();
+		const session = plugin.mode2Session.get("snippets")!;
+		const state = plugin.getEnabledDisabled();
+		expect(session.candidates.size).toBe(2);
+		expect(session.enabledUnderTest.size).toBe(1);
+		expect(state.enabled).toHaveLength(1);
+		expect(state.disabled).toHaveLength(3);
 	});
 
 	it("Enable All turns all snippets on", async () => {

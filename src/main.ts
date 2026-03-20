@@ -1,4 +1,4 @@
-import { Command, Notice, Plugin, PluginManifest, SettingsTab } from "obsidian";
+import { Command, Notice, Plugin, SettingsTab } from "obsidian";
 import type { Composed, Func, Mode } from "./util";
 import { DACSettingsTab, DEFAULT_SETTINGS } from "./settings";
 import { Modes, compose, getSnippetItems, makeArray, queryText, removeSetupDebugNotice, simpleCalc } from "./util";
@@ -21,7 +21,7 @@ interface BisectSession {
 	isRunning: boolean;
 	candidates: Set<string>;
 	enabledUnderTest: Set<string>;
-	culpritId?: string;
+	culpritId: string | undefined;
 }
 
 const pluginCommands: DACCommand[] = [
@@ -71,7 +71,7 @@ export default class divideAndConquer extends Plugin {
 	set controls(c) { this.mode2Controls.set(this.mode, c ?? []); }
 	get tab() { return this.mode2Tab.get(this.mode); }
 	get wrapper() { return this.mode2Call.get(this.mode); }
-	get refreshTab() { return this.mode2Refresh.get(this.mode); }
+	get refreshTab(): (() => void) | undefined { return this.mode2Refresh.get(this.mode); }
 	set refreshTab(f: () => void) { this.mode2Refresh.set(this.mode, f); }
 
 	override async onunload() {
@@ -133,8 +133,10 @@ export default class divideAndConquer extends Plugin {
 
 		this.getItemEls = () => {
 			switch (this.mode) {
-				case "plugins":
-					return makeArray(this.tab?.containerEl.find(".installed-plugins-container")?.children);
+				case "plugins": {
+					const installedContainer = this.tab?.containerEl.find(".installed-plugins-container");
+					return installedContainer ? makeArray(installedContainer.children) : [];
+				}
 				case "snippets":
 					return getSnippetItems(this.tab as SettingsTab);
 				default:
@@ -201,11 +203,11 @@ export default class divideAndConquer extends Plugin {
 		});
 	}
 
-	public async loadData() {
+	public override async loadData() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await super.loadData());
 	}
 
-	public async saveData() {
+	public override async saveData() {
 		await super.saveData(this.settings);
 	}
 
@@ -221,7 +223,7 @@ export default class divideAndConquer extends Plugin {
 				el.style.marginLeft = "8px";
 				el.ariaLabel = button.tooltip;
 				el.setText(this.getButtonLabel(button.id));
-				el.onclick = this.wrapCall(this.mode, button.id);
+				el.onclick = () => this.wrapCall(this.mode, button.id)?.();
 				return el;
 			});
 			this.mode2Controls.set(this.mode, [...buttons, this.createStatusText()]);
@@ -297,14 +299,25 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 
-		const disabledInCandidateSet = [...session.candidates].filter(id => !session.enabledUnderTest.has(id));
-		if (disabledInCandidateSet.length < 1) {
+		const previousCandidates = new Set(session.candidates);
+		const remainingCandidates = [...session.candidates].filter(id => !session.enabledUnderTest.has(id));
+		if (remainingCandidates.length < 1) {
 			new Notice("No alternate group left to test.");
 			return;
 		}
 
-		session.enabledUnderTest = new Set(disabledInCandidateSet);
-		await this.applyTestState(session.candidates, session.enabledUnderTest);
+		if (remainingCandidates.length === 1) {
+			session.candidates = new Set(remainingCandidates);
+			session.enabledUnderTest = new Set(remainingCandidates);
+			session.culpritId = remainingCandidates[0];
+			session.isRunning = false;
+			await this.applyTestState(previousCandidates, session.enabledUnderTest);
+			return;
+		}
+
+		session.candidates = new Set(remainingCandidates);
+		session.enabledUnderTest = new Set(this.takeFirstHalf(remainingCandidates));
+		await this.applyTestState(previousCandidates, session.enabledUnderTest);
 	}
 
 	public getEnabledDisabled() {
@@ -359,11 +372,13 @@ export default class divideAndConquer extends Plugin {
 
 	private getSession() {
 		if (!this.mode2Session.has(this.mode)) {
-			this.mode2Session.set(this.mode, {
+			const session: BisectSession = {
 				isRunning: false,
-				candidates: new Set(),
-				enabledUnderTest: new Set(),
-			});
+				candidates: new Set<string>(),
+				enabledUnderTest: new Set<string>(),
+				culpritId: undefined,
+			};
+			this.mode2Session.set(this.mode, session);
 		}
 		return this.mode2Session.get(this.mode) as BisectSession;
 	}
