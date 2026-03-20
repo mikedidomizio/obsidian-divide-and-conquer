@@ -9,7 +9,8 @@
 		"build:analyze": "npm run build -- analyze",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"coverage": "vitest run --coverage"
+		"coverage": "vitest run --coverage",
+		"lint": "markdownlint \"**/*.md\" --ignore node_modules"
 	},
 	"keywords": [],
 	"author": "geoffreysflaminglasersword & Chris Grieser (aka pseudometa)",
