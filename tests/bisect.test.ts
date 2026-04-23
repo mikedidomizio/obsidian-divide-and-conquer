@@ -198,6 +198,30 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(enabled.has("c")).toBe(true);
 	});
 
+	it("Enable All clears an in-progress plugin bisect session", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		await plugin.startBisect();
+		await plugin.answerYes();
+
+		expect((plugin as any).getButtonLabel("enableAll")).toBe("Reset");
+		await plugin.enableAll();
+
+		const enabled = plugin.getEnabledFromObsidian();
+		expect(enabled.has("a")).toBe(true);
+		expect(enabled.has("b")).toBe(true);
+		expect(enabled.has("c")).toBe(true);
+		expect(enabled.has("d")).toBe(true);
+
+		const session = plugin.mode2Session.get("plugins")!;
+		expect(session.isRunning).toBe(false);
+		expect(session.candidates.size).toBe(0);
+		expect(session.enabledUnderTest.size).toBe(0);
+		expect(session.culpritId).toBeUndefined();
+		expect(session.enabledBeforeBisect).toBeUndefined();
+		expect(session.awaitingInitialAnswer).toBe(false);
+		expect((plugin as any).getButtonLabel("enableAll")).toBe("Enable All");
+	});
+
 	it("Start bisect sets a one-time reload skip token", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		expect((plugin as any).consumeReloadSkipToken()).toBe(false);
@@ -246,6 +270,28 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.culpritId).toBeUndefined();
 		expect(session.enabledBeforeBisect).toBeUndefined();
 		expect((plugin as any).getButtonLabel("enableAll")).toBe("Enable All");
+	});
+
+	it("Reset restores plugin states correctly after multiple answers", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
+		const before = plugin.getEnabledDisabled();
+
+		await plugin.startBisect();
+		await plugin.answerYes();
+		await plugin.answerYes();
+		await plugin.resetBisect();
+
+		const after = plugin.getEnabledDisabled();
+		expect(after.enabled).toEqual(before.enabled);
+		expect(after.disabled).toEqual(before.disabled);
+
+		const session = plugin.mode2Session.get("plugins")!;
+		expect(session.isRunning).toBe(false);
+		expect(session.candidates.size).toBe(0);
+		expect(session.enabledUnderTest.size).toBe(0);
+		expect(session.culpritId).toBeUndefined();
+		expect(session.enabledBeforeBisect).toBeUndefined();
+		expect(session.awaitingInitialAnswer).toBe(false);
 	});
 });
 
