@@ -1,187 +1,178 @@
-import { Command, ExtraButtonComponent, Notice, Plugin, PluginManifest, SettingsTab } from "obsidian";
-import type { Composed, Func, JSONSetArrayMap, Mode } from "./util";
-import { DACSettingsTab, DEFAULT_SETTINGS } from "./settings";
-import { Modes, compose, getSnippetItems, makeArray, queryText, removeSetupDebugNotice, simpleCalc } from './util';
-
-import { around } from 'monkey-around';
+import { Command, Notice, Plugin, SettingsTab } from "obsidian";
+import type { Composed, Func, Mode } from "./util";
+import { DACSettingsTab, DEFAULT_SETTINGS, type PersistedBisectSession } from "./settings";
+import { Modes, compose, getSnippetItems, makeArray, queryText, removeSetupDebugNotice, simpleCalc } from "./util";
+import { around } from "monkey-around";
 
 const tinycolor = require("tinycolor2");
 
-const CSS_DELAY = 200; // delay after enabling/disabling css to allow for obsidian to relect changes before refreshing
-const RESET_DELAY = 1000; // delay after resetting to allow for obsidian to relect changes before refreshing
+const CSS_DELAY = 200;
 
-// these interfaces allow a level of type checking for the arrays below
-interface DACCommand { id: keyof divideAndConquer; name: string; }
+interface DACCommand { id: string; method: keyof divideAndConquer; name: string; }
 interface DACButton { id: keyof divideAndConquer; tooltip: string; }
-interface NameNID { name: string; id: string; author?: string; description?: string; }
+interface NameNID {
+	name: string;
+	id: string;
+	author?: string;
+	description?: string;
+}
 
- 
-// prettier-ignore
+interface BisectSession {
+	isRunning: boolean;
+	candidates: Set<string>;
+	enabledUnderTest: Set<string>;
+	culpritId: string | undefined;
+	enabledBeforeBisect: Set<string> | undefined;
+	awaitingInitialAnswer: boolean;
+}
+
 const pluginCommands: DACCommand[] = [
-	{ id: "reset", 		name: "Plugin Reset - forget the original state and set the current state as the new original state" },
-	{ id: "restore", 	name: "Plugin Restore - return to the original state" },
-	{ id: "unBisect", 	name: "Plugin Un-Bisect - Undo the last bisection, or enable all plugins if in the original state" },
-	{ id: "bisect", 	name: "Plugin Bisect - Disable half of the active plugins, or return to the original state if all plugins are active" },
-	{ id: "reBisect", 	name: "Plugin Re-Bisect - Undo the last bisection, then disable the other half" },
+	{ id: "plugin-enable-all", method: "enableAll", name: "Plugin Enable All - enable every installed plugin" },
+	{ id: "plugin-start-bisect", method: "startBisect", name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half" },
+	{ id: "plugin-answer-yes", method: "answerYes", name: "Plugin Bisect Yes - issue still happens with the currently enabled plugins" },
+	{ id: "plugin-answer-no", method: "answerNo", name: "Plugin Bisect No - issue does not happen with the currently enabled plugins" },
 ];
 
 const snippetCommands: DACCommand[] = [
-	{ id: "reset", 		name: "Snippet Reset - forget the original state and set the current state as the new original state" },
-	{ id: "restore", 	name: "Snippet Restore - return to the original state" },
-	{ id: "unBisect", 	name: "Snippet Un-Bisect - Undo the last bisection, or enable all snippets if in the original state" },
-	{ id: "bisect", 	name: "Snippet Bisect - Disable half of the active snippets, or return to the original state if all snippets are active" },
-	{ id: "reBisect", 	name: "Snippet Re-Bisect - Undo the last bisection, then disable the other half" },
+	{ id: "snippet-start-bisect", method: "startBisect", name: "Snippet Bisect Start - begin troubleshooting by splitting CSS snippets in half" },
+	{ id: "snippet-answer-yes", method: "answerYes", name: "Snippet Bisect Yes - issue still happens with the currently enabled CSS snippets" },
+	{ id: "snippet-answer-no", method: "answerNo", name: "Snippet Bisect No - issue does not happen with the currently enabled CSS snippets" },
+	{ id: "snippet-enable-all", method: "enableAll", name: "Snippet Enable All - enable every installed CSS snippet" },
 ];
 
-// the ordering of these determines the order in the settings tab
 const UIButtons: DACButton[] = [
-	{ id: "reset", 		tooltip: "Reset - Snapshot the current state" },
-	{ id: "restore", 	tooltip: "Restore - Restore Snapshot" },
-	{ id: "unBisect", 	tooltip: "UnBisect - Go up a level" },
-	{ id: "bisect", 	tooltip: "Bisect - Go down a level" },
-	{ id: "reBisect", 	tooltip: "Re-bisect - Go back a level, then down the other side" },
+	{ id: "enableAll", tooltip: "Enable all items" },
+	{ id: "startBisect", tooltip: "Start bisect" },
+	{ id: "answerYes", tooltip: "Issue still happens" },
+	{ id: "answerNo", tooltip: "Issue does not happen" },
 ];
-
-const icons: [keyof divideAndConquer, string][] = [
-	["reset", "camera"],
-	["restore", "switch-camera"],
-	["unBisect", "expand"],
-	["bisect", "minimize"],
-	["reBisect", "flip-vertical"]
-];
-// prettier-ignore
- 
-
 
 export default class divideAndConquer extends Plugin {
-	settings: typeof DEFAULT_SETTINGS;
+	settings!: typeof DEFAULT_SETTINGS;
 	manifests = this.app.plugins.manifests;
-	enabledColor: string = null;
-	disabledColor: string = null;
-	getItemEls: () => Element[];
-	getAllItems: () => Set<NameNID>;
-	getEnabledFromObsidian: () => Set<string>;
-	enableItem: (item: string) => Promise<any>;
-	disableItem: (item: string) => Promise<any>;
-	getFilters: () => string[];
+	private skipNextReload = false;
+	enabledColor: string | null = null;
+	disabledColor: string | null = null;
+	getItemEls!: () => Element[];
+	getAllItems!: () => Set<NameNID>;
+	getEnabledFromObsidian!: () => Set<string>;
+	enableItem!: (item: string) => Promise<unknown>;
+	disableItem!: (item: string) => Promise<unknown>;
+	getFilters!: () => string[];
 
 	private _mode: Mode = "plugins";
 	public get mode(): Mode { return this._mode; }
-	private setMode(mode: Mode) { this._mode = mode; } // this just makes it more explicit and easier to find where the mode is set
+	private setMode(mode: Mode) { this._mode = mode; }
 
 	mode2Call: Map<Mode, Composed> = new Map();
 	mode2Refresh: Map<Mode, () => void> = new Map();
 	mode2Tab: Map<Mode, SettingsTab> = new Map();
 	mode2Controls: Map<Mode, HTMLElement[]> = new Map();
-	mode2DisabledStates: Map<Mode, Set<string>[]> = new Map();
-	mode2Snapshot: Map<Mode, Set<string>> = new Map();
-	mode2Level: Map<Mode, number> = new Map(Modes.map(mode => [mode, 1]));
-	key2Icon: Map<keyof divideAndConquer, string> = new Map(icons);
-	disableButtons = false;
-
-	get disabledState() { return this.mode2DisabledStates.get(this.mode) ?? []; }
-	set disabledState(s) { this.mode2DisabledStates.set(this.mode, s ?? []); }
-
-	get snapshot() { return this.mode2Snapshot.get(this.mode) ?? new Set(); }
-	set snapshot(s) { this.mode2Snapshot.set(this.mode, s ?? new Set()); }
+	mode2Session: Map<Mode, BisectSession> = new Map();
 
 	get controls() { return this.mode2Controls.get(this.mode) ?? []; }
 	set controls(c) { this.mode2Controls.set(this.mode, c ?? []); }
-
 	get tab() { return this.mode2Tab.get(this.mode); }
 	get wrapper() { return this.mode2Call.get(this.mode); }
-	get refreshTab() { return this.mode2Refresh.get(this.mode); }
+	get refreshTab(): (() => void) | undefined { return this.mode2Refresh.get(this.mode); }
 	set refreshTab(f: () => void) { this.mode2Refresh.set(this.mode, f); }
 
-	set level(l) { this.mode2Level.set(this.mode, l); }
-	get level() {
-		if (!this.mode2Level.has(this.mode)) this.mode2Level.set(this.mode, 1);
-		return this.mode2Level.get(this.mode);
+	override async onunload() {
+		await this.saveData();
 	}
 
-
-	async onunload() {
-		this.saveData();
-		console.log("Divide & Conquer Plugin unloaded.");
-	}
-
-	async onload() {
+	override async onload() {
 		await this.loadData();
 		this.addSettingTab(new DACSettingsTab(this.app, this));
-		console.log("Divide & Conquer Plugin loaded.");
 
 		const notice = () => {
-			removeSetupDebugNotice(); // these have no timeout
-			const notic_str = `${this.mode} level:${this.level} `;
-			if (this.level === 1) new Notice(notic_str + "- Now in the original state");
-			else if (this.level === 0) new Notice(notic_str + "- Enabled All");
-			else new Notice(notic_str);
+			removeSetupDebugNotice();
+			const session = this.getSession();
+			if (!session.culpritId) return;
+			const label = this.mode === "plugins" ? "plugin" : "CSS snippet";
+			new Notice(`Possible ${label} culprit: ${this.getDisplayName(session.culpritId)}`);
 		};
 
 		const maybeReload = async () => {
+			if (this.consumeReloadSkipToken()) return;
 			if (!this.settings.reloadAfterPluginChanges) return;
-			await this.saveData(false);
+			await this.saveData();
 			setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
 		};
 
-		const maybeInit = () => {
-			if (this.settings.initializeAfterPluginChanges) return this.app.plugins.initialize();
+		const maybeInit = async () => {
+			if (!this.settings.initializeAfterPluginChanges) return;
+			await this.app.plugins.initialize();
 		};
 
-		// mode2Call stores functions which, when called with a function, return composed functions that will automatically switch modes among other things
-		this.mode2Call = new Map(Modes.map(mode => [mode, (f: Func) => async () => compose(this,
+		this.mode2Call = new Map(Modes.map(mode => [mode, (f: Func) => async () => compose(
+			this,
 			() => this.setMode(mode),
-			() => console.log('called: ', f.name),
-			f, () => this.mode2Refresh.get(this.mode)(), maybeReload, maybeInit, notice
+			f,
+			() => this.mode2Refresh.get(this.mode)?.(),
+			maybeReload,
+			maybeInit,
+			notice,
 		).bind(this)()]));
 
-
-
-		//////////// Pretty much anything that differs between modes is specified here //////////////
-
-		// override the display of tabs to add controls
 		this.mode2Tab = new Map<Mode, SettingsTab>(([
 			["plugins", "community-plugins"],
-			["snippets", "appearance"]
+			["snippets", "appearance"],
 		] as [Mode, string][]).map(([mode, id]) => [mode, this.getSettingsTab(id) as SettingsTab]));
 
-		// store mode specific info in the repective tab
-		Object.assign(
-			this.mode2Tab.get('plugins'),
-			{ heading: 'Installed plugins', reloadLabel: 'Reload plugins', reload: () => this.app.plugins.loadManifests() });
-		Object.assign(
-			this.mode2Tab.get('snippets'),
-			{ heading: 'CSS snippets', reloadLabel: 'Reload snippets', reload: () => this.app.customCss.loadSnippets() });
+		Object.assign(this.mode2Tab.get("plugins") as object, {
+			heading: "Installed plugins",
+			reloadLabel: "Reload plugins",
+			reload: () => this.app.plugins.loadManifests(),
+		});
+		Object.assign(this.mode2Tab.get("snippets") as object, {
+			heading: "CSS snippets",
+			reloadLabel: "Reload snippets",
+			reload: () => this.app.customCss.loadSnippets(),
+		});
 
-		[...this.mode2Tab.entries()].forEach(([mode, tab]) => this.register(around(tab, { display: this.overrideDisplay.bind(this, mode, tab) })));
+		for (const [mode, tab] of this.mode2Tab.entries()) {
+			this.register(around(tab, { display: this.overrideDisplay.bind(this, mode, tab) }));
+		}
 
 		this.getItemEls = () => {
 			switch (this.mode) {
-				case 'plugins': return makeArray(this.tab.containerEl.find(".installed-plugins-container").children);
-				case 'snippets': return getSnippetItems(this.tab);
-				default: throw new Error("Unknown mode: " + this.mode);
+				case "plugins": {
+					const installedContainer = this.tab?.containerEl.find(".installed-plugins-container");
+					return installedContainer ? makeArray(installedContainer.children) : [];
+				}
+				case "snippets":
+					return getSnippetItems(this.tab as SettingsTab);
+				default:
+					throw new Error("Unknown mode: " + this.mode);
 			}
 		};
 
 		this.getAllItems = () => {
 			switch (this.mode) {
-				case 'plugins': return new Set(Object.values(this.manifests));
-				case 'snippets': return new Set((this.app.customCss.snippets).map(s => ({ name: s, id: s })));
+				case "plugins":
+					return new Set(Object.values(this.manifests));
+				case "snippets":
+					return new Set(this.app.customCss.snippets.map((s) => ({ name: s, id: s })));
 			}
 		};
 
 		this.getEnabledFromObsidian = () => {
 			switch (this.mode) {
-				case 'plugins': return this.app.plugins.enabledPlugins;
-				// enabledSnippets can sometimes annoyingly include snippets that were removed without disabling
-				case 'snippets': return new Set(this.app.customCss.snippets.filter((snippet) => this.app.customCss.enabledSnippets.has(snippet)));
+				case "plugins":
+					return this.app.plugins.enabledPlugins;
+				case "snippets":
+					return new Set(
+						this.app.customCss.snippets.filter((snippet) => this.app.customCss.enabledSnippets.has(snippet)),
+					);
 			}
 		};
 
 		this.enableItem = (id: string) => {
 			switch (this.mode) {
-				case 'plugins': return this.app.plugins.enablePluginAndSave(id);
-				case 'snippets':
+				case "plugins":
+					return this.app.plugins.enablePluginAndSave(id);
+				case "snippets":
 					return new Promise((resolve) => {
 						this.app.customCss.setCssEnabledStatus(id, true);
 						setTimeout(() => resolve({}), CSS_DELAY);
@@ -191,8 +182,9 @@ export default class divideAndConquer extends Plugin {
 
 		this.disableItem = (id: string) => {
 			switch (this.mode) {
-				case 'plugins': return this.app.plugins.disablePluginAndSave(id);
-				case 'snippets':
+				case "plugins":
+					return this.app.plugins.disablePluginAndSave(id);
+				case "snippets":
 					return new Promise((resolve) => {
 						this.app.customCss.setCssEnabledStatus(id, false);
 						setTimeout(() => resolve({}), CSS_DELAY);
@@ -202,157 +194,186 @@ export default class divideAndConquer extends Plugin {
 
 		this.getFilters = () => {
 			switch (this.mode) {
-				case 'plugins': return this.settings.pluginFilterRegexes;
-				case 'snippets': return this.settings.snippetFilterRegexes;
+				case "plugins": return this.settings.pluginFilterRegexes;
+				case "snippets": return this.settings.snippetFilterRegexes;
 			}
 		};
 
-		////////////////////////////////////////////////////////////////////////////////////////////
-
 		this.addCommands();
-		// when the workspace is ready, get the computed checkbox colors
 		this.app.workspace.onLayoutReady(() => {
 			const appContainer = document.getElementsByClassName("app-container").item(0) as HTMLDivElement;
-			this.enabledColor ??= tinycolor(simpleCalc(appContainer.getCssPropertyValue('--checkbox-color'))).spin(180).toHexString();
+			this.enabledColor ??= tinycolor(simpleCalc(appContainer.getCssPropertyValue("--checkbox-color"))).spin(180).toHexString();
 			this.disabledColor ??= tinycolor(this.enabledColor).darken(35).toHexString();
 		});
 	}
 
-	public async loadData() {
+	public override async loadData() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await super.loadData());
-		this.mode2DisabledStates = this.settings.disabledStates ? new Map(
-			(Object.entries(JSON.parse(this.settings.disabledStates)) as JSONSetArrayMap)
-				.map(([mode, states]) => [mode, states.map(state => new Set(state))])
-		) : new Map();
-		this.mode2Snapshot = this.settings.snapshots ? new Map(
-			(Object.entries(JSON.parse(this.settings.snapshots)) as JSONSetArrayMap)
-				.map(([mode, states]) => [mode, new Set(states)])
-		) : new Map();
-		const parsedLevels = this.settings.levels ? Object.entries(JSON.parse(this.settings.levels)) : [];
-		this.mode2Level = new Map(Modes.map(mode => [mode, 1]));
-		for (const [mode, level] of parsedLevels) {
-			if (!Modes.includes(mode as Mode)) continue;
-			if (typeof level !== "number" || !Number.isFinite(level)) continue;
-			this.mode2Level.set(mode as Mode, level);
-		}
+		this.settings.bisectSessions ??= {};
 	}
 
-	public async saveData(restore: boolean = true) {
-		if (this.mode2DisabledStates) this.settings.disabledStates = JSON.stringify(Object.fromEntries(
-			[...this.mode2DisabledStates.entries()].map(([mode, sets]) => [mode, [...sets].map(set => [...set])])
-		));
-		else this.settings.disabledStates = undefined;
-
-		if (this.mode2Snapshot) this.settings.snapshots = JSON.stringify(Object.fromEntries(
-			[...this.mode2Snapshot.entries()].map(([mode, set]) => [mode, [...set]])
-		));
-		else this.settings.snapshots = undefined;
-
-		if (this.mode2Level) this.settings.levels = JSON.stringify(Object.fromEntries(this.mode2Level.entries()));
-		else this.settings.levels = undefined;
-
-		if (restore) await this.restore();
+	public override async saveData() {
 		await super.saveData(this.settings);
 	}
 
 	private addControls() {
 		const container = this.getControlContainer();
-		this.mode2Controls ??= new Map<Mode, HTMLDivElement[]>();
-		if (!this.mode2Controls.has(this.mode)) this.mode2Controls.set(this.mode,
-			[...UIButtons.map(o => new ExtraButtonComponent(container)
-				.setTooltip(o.tooltip)
-				.setIcon(this.key2Icon.get(o.id))
-				.onClick(this.wrapCall(this.mode, o.id))
-				.setDisabled(false).extraSettingsEl
-			), this.createLevelText()]
-		);
-		this.controls.last().setText(`Level: ${this.mode2Level.get(this.mode)}`);
-		this.controls.forEach(control => container.appendChild(control));
+		if (!container) return;
+
+		if (!this.mode2Controls.has(this.mode)) {
+			const buttons = UIButtons.map((button) => {
+				const el = document.createElement("button");
+				el.type = "button";
+				el.classList.add("mod-cta");
+				el.style.marginLeft = "8px";
+				el.ariaLabel = button.tooltip;
+				el.setText(this.getButtonLabel(button.id));
+				el.onclick = () => this.wrapCall(this.mode, button.id)?.();
+				return el;
+			});
+			this.mode2Controls.set(this.mode, [...buttons, this.createStatusText()]);
+		}
+
+		this.updateControlState();
+		for (const control of this.controls) {
+			container.appendChild(control);
+		}
 	}
 
 	private addCommands() {
-		type PC = Partial<Command>;
-		pluginCommands.forEach(command => this.addCommand(
-			Object.assign(command, { callback: this.mode2Call.get('plugins')(this[command.id] as Func) } as PC)
-		));
-		snippetCommands.forEach(command => this.addCommand(
-			Object.assign(command, { callback: this.mode2Call.get('snippets')(this[command.id] as Func) } as PC)
-		));
+		for (const command of pluginCommands) {
+			this.addCommand({
+				id: command.id,
+				name: command.name,
+				callback: this.mode2Call.get("plugins")?.(this[command.method] as Func),
+			});
+		}
+		for (const command of snippetCommands) {
+			this.addCommand({
+				id: command.id,
+				name: command.name,
+				callback: this.mode2Call.get("snippets")?.(this[command.method] as Func),
+			});
+		}
 	}
 
-	async bisect() {
-		this.level = this.level + 1;
-		if ((this.level) === 1) { this.restore(); return; }
-		const { enabled } = this.getCurrentState();
-		const half = await this.disableItems(enabled.slice(0, Math.floor(enabled.length / 2)));
-		if (half.length > 0) this.disabledState.push(new Set(half));
-		else this.level--;
-		return half;
+	public async enableAll() {
+		const allItems = this.getAllSortedItems();
+		await this.enableItems(allItems.map(item => item.id));
+		this.clearSession(this.getSession());
+		await this.persistSession();
 	}
 
-	public async unBisect() {
-		this.level = this.level > 0 ? this.level - 1 : 0;
-		const { disabled } = this.getCurrentState();
-		await this.enableItems(disabled);
-		// this allows unbisect to turn on all plugins without losing the original state
-		if (this.disabledState.length > 1) return this.disabledState.pop();
-		return new Set();
+	public async resetBisect() {
+		const session = this.getSession();
+		const enabledBeforeBisect = session.enabledBeforeBisect;
+
+		if (enabledBeforeBisect) {
+			const allIds = this.getAllSortedItems().map(item => item.id);
+			const toEnable = allIds.filter(id => enabledBeforeBisect.has(id));
+			const toDisable = allIds.filter(id => !enabledBeforeBisect.has(id));
+			await this.enableItems(toEnable);
+			await this.disableItems(toDisable);
+		}
+
+		this.clearSession(session);
+		await this.persistSession();
 	}
 
-	public async reBisect() {
-		if (this.level < 2) {
-			new Notice("Cannot re-bisect the original state.");
+	public async startBisect() {
+		const candidates = this.getIncludedSortedItems();
+		if (candidates.length < 1) {
+			new Notice(`No ${this.getPluralLabel()} available for bisect.`);
 			return;
 		}
-		const reenabled = await this.unBisect();
-		const { enabled } = this.getCurrentState();
-		const toDisable = enabled.filter(id => !reenabled.has(id));
-		await this.disableItems(toDisable);
-		if (toDisable.length > 0) {
-			this.disabledState.push(new Set(toDisable));
-			this.level = this.level + 1;
+
+		const session = this.getSession();
+		session.isRunning = true;
+		session.culpritId = undefined;
+		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		session.candidates = new Set(candidates.map(item => item.id));
+		session.enabledUnderTest = new Set(
+			[...session.candidates].filter(id => session.enabledBeforeBisect?.has(id)),
+		);
+		session.awaitingInitialAnswer = true;
+		// Starting bisect from settings should not immediately reload Obsidian.
+		this.skipNextReload = true;
+		await this.persistSession();
+	}
+
+	public async answerYes() {
+		const session = this.getSession();
+		if (!session.isRunning) {
+			new Notice("Start bisect before answering.");
+			return;
 		}
+
+		if (session.awaitingInitialAnswer) {
+			session.awaitingInitialAnswer = false;
+			if (session.enabledUnderTest.size < 1) {
+				new Notice(`No enabled ${this.getPluralLabel()} to test.`);
+				await this.persistSession();
+				return;
+			}
+		}
+
+		if (session.enabledUnderTest.size === 1) {
+			session.culpritId = [...session.enabledUnderTest][0];
+			session.isRunning = false;
+			await this.persistSession();
+			return;
+		}
+
+		session.candidates = new Set(session.enabledUnderTest);
+		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
+		await this.applyTestState(session.candidates, session.enabledUnderTest);
+		await this.persistSession();
 	}
 
+	public async answerNo() {
+		const session = this.getSession();
+		if (!session.isRunning) {
+			new Notice("Start bisect before answering.");
+			return;
+		}
+		session.awaitingInitialAnswer = false;
 
-	public reset() {
-		this.disabledState = this.snapshot = undefined;
-		this.level = 1;
-		const { enabled, disabled } = this.getEnabledDisabled();
-		this.disabledState = [new Set(disabled)];
-		this.snapshot = new Set(disabled);
-		this.saveData(false);
-	}
+		const previousCandidates = new Set(session.candidates);
+		const remainingCandidates = [...session.candidates].filter(id => !session.enabledUnderTest.has(id));
+		if (remainingCandidates.length < 1) {
+			this.clearSession(session);
+			await this.persistSession();
+			new Notice("No alternate group left to test. Bisect stopped.");
+			return;
+		}
 
-	public async restore() {
-		if (this.disabledState.length < 1) return;
-		// log the current time
-		// ignore the first state (since it's the original state) and disable the rest in the order they were disabled
-		this.disabledState.slice(1).reverse().map((set) => this.enableItems(set));
-		await this.disableItems(this.snapshot);
-		await this.app.plugins.requestSaveConfig();
-		setTimeout(() => this.reset(), RESET_DELAY); // obsidian takes it's sweet time to update which plugins are enabled even after the promise resolves
-	}
+		if (remainingCandidates.length === 1) {
+			session.candidates = new Set(remainingCandidates);
+			session.enabledUnderTest = new Set(remainingCandidates);
+			session.culpritId = remainingCandidates[0];
+			session.isRunning = false;
+			await this.applyTestState(previousCandidates, session.enabledUnderTest);
+			await this.persistSession();
+			return;
+		}
 
-	public getCurrentState() {
-		const { enabled, disabled } = this.getEnabledDisabled();
-		this.disabledState = this.disabledState.length < 1 ? [new Set(disabled)] : this.disabledState;
-		const currentDisabled = this.disabledState.last();
-		return { enabled, disabled: currentDisabled };
+		session.candidates = new Set(remainingCandidates);
+		session.enabledUnderTest = new Set(this.takeFirstHalf(remainingCandidates));
+		await this.applyTestState(previousCandidates, session.enabledUnderTest);
+		await this.persistSession();
 	}
 
 	public getEnabledDisabled() {
-		// the whole point of using sets is constant time lookup, but js is dumb and does strict object equality with no allowance for custom comparators
-		// with our small data sets, it probably won't hurt performance but this is technically O(n^2)
 		const excluded = [...this.getExcludedItems()];
-		const included = [...this.getAllItems()].filter(item => !excluded.some(i => i.id === item.id))
-			.sort((a, b) => b.name.localeCompare(a.name)) // sort by display name rather than id
+		const included = [...this.getAllItems()]
+			.filter(item => !excluded.some(i => i.id === item.id))
+			.sort((a, b) => b.name.localeCompare(a.name))
 			.map((item) => item.id);
-		const result = {
+
+		return {
 			enabled: included.filter(id => this.getEnabledFromObsidian().has(id)),
-			disabled: included.filter(id => !this.getEnabledFromObsidian().has(id))
+			disabled: included.filter(id => !this.getEnabledFromObsidian().has(id)),
 		};
-		return result;
 	}
 
 	public getIncludedItems(mode?: Mode) {
@@ -360,121 +381,255 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public getExcludedItems(mode?: Mode, outIncluded: boolean = false) {
-		const oldmode = this.mode;
+		const oldMode = this.mode;
 		if (mode) this.setMode(mode);
-		const plugins = [...this.getAllItems()].filter(
-			(p: NameNID) => outIncluded !== this.getFilters().some(
-				filter => p.id.match(new RegExp(filter, "i"))
-					|| (this.settings.filterUsingDisplayName && p.name.match(new RegExp(filter, "i")))
-					|| (this.settings.filterUsingAuthor && p.author?.match(new RegExp(filter, "i")))
-					|| (this.settings.filterUsingDescription && p.description?.match(new RegExp(filter, "i")))
-			));
-		if (mode) this.setMode(oldmode);
-		return new Set(plugins);
+
+		const filtered = [...this.getAllItems()].filter(
+			(item) => outIncluded !== this.getFilters().some(
+				(filter) => item.id.match(new RegExp(filter, "i"))
+					|| (this.settings.filterUsingDisplayName && item.name.match(new RegExp(filter, "i")))
+					|| (this.settings.filterUsingAuthor && item.author?.match(new RegExp(filter, "i")))
+					|| (this.settings.filterUsingDescription && item.description?.match(new RegExp(filter, "i"))),
+			),
+		);
+
+		if (mode) this.setMode(oldMode);
+		return new Set(filtered);
 	}
 
-	// enables in the reverse order that they were disabled (probably not necessary, but it's nice to be consistent)
 	async enableItems(items: string[] | Set<string>) {
-		if (items instanceof Set) items = [...items];
-		console.log("Enabling:", items);
-		items.reverse().map(id => this.enableItem(id));
-		return items;
+		const list = items instanceof Set ? [...items] : [...items];
+		for (const id of list.reverse()) {
+			await this.enableItem(id);
+		}
+		return list;
 	}
 
 	async disableItems(items: string[] | Set<string>) {
-		if (items instanceof Set) items = [...items];
-		console.log("Disabling:", items);
-		for (const id of items) {
+		const list = items instanceof Set ? [...items] : [...items];
+		for (const id of list) {
 			await this.disableItem(id);
 		}
-		return items;
+		return list;
+	}
+
+	private getSession() {
+		if (!this.mode2Session.has(this.mode)) {
+			const session = this.deserializeSession(this.settings.bisectSessions?.[this.mode]);
+			this.mode2Session.set(this.mode, session);
+		}
+		return this.mode2Session.get(this.mode) as BisectSession;
+	}
+
+	private deserializeSession(session?: PersistedBisectSession): BisectSession {
+		if (!session) {
+			return {
+				isRunning: false,
+				candidates: new Set<string>(),
+				enabledUnderTest: new Set<string>(),
+				culpritId: undefined,
+				enabledBeforeBisect: undefined,
+				awaitingInitialAnswer: false,
+			};
+		}
+
+		return {
+			isRunning: session.isRunning,
+			candidates: new Set(session.candidates ?? []),
+			enabledUnderTest: new Set(session.enabledUnderTest ?? []),
+			culpritId: session.culpritId,
+			enabledBeforeBisect: session.enabledBeforeBisect ? new Set(session.enabledBeforeBisect) : undefined,
+			awaitingInitialAnswer: session.awaitingInitialAnswer,
+		};
+	}
+
+	private serializeSession(session: BisectSession): PersistedBisectSession {
+		return {
+			isRunning: session.isRunning,
+			candidates: [...session.candidates],
+			enabledUnderTest: [...session.enabledUnderTest],
+			culpritId: session.culpritId,
+			enabledBeforeBisect: session.enabledBeforeBisect ? [...session.enabledBeforeBisect] : undefined,
+			awaitingInitialAnswer: session.awaitingInitialAnswer,
+		};
+	}
+
+	private isSessionEmpty(session: BisectSession) {
+		return !session.isRunning
+			&& session.candidates.size < 1
+			&& session.enabledUnderTest.size < 1
+			&& !session.culpritId
+			&& !session.enabledBeforeBisect
+			&& !session.awaitingInitialAnswer;
+	}
+
+	private async persistSession(mode: Mode = this.mode) {
+		const session = this.mode2Session.get(mode);
+		if (!session) return;
+
+		const persisted = { ...(this.settings.bisectSessions ?? {}) };
+		if (this.isSessionEmpty(session)) delete persisted[mode];
+		else persisted[mode] = this.serializeSession(session);
+		this.settings.bisectSessions = persisted;
+		await this.saveData();
+	}
+
+	private clearSession(session: BisectSession) {
+		session.isRunning = false;
+		session.candidates = new Set();
+		session.enabledUnderTest = new Set();
+		session.culpritId = undefined;
+		session.enabledBeforeBisect = undefined;
+		session.awaitingInitialAnswer = false;
+	}
+
+	private consumeReloadSkipToken() {
+		if (!this.skipNextReload) return false;
+		this.skipNextReload = false;
+		return true;
+	}
+
+	private getPluralLabel() {
+		return this.mode === "plugins" ? "plugins" : "CSS snippets";
+	}
+
+	private getSingularLabel() {
+		return this.mode === "plugins" ? "plugin" : "CSS snippet";
+	}
+
+	private getIncludedSortedItems() {
+		return [...this.getIncludedItems()].sort((a, b) => b.name.localeCompare(a.name));
+	}
+
+	private getAllSortedItems() {
+		return [...this.getAllItems()].sort((a, b) => b.name.localeCompare(a.name));
+	}
+
+	private takeFirstHalf(ids: string[]) {
+		return ids.slice(0, Math.ceil(ids.length / 2));
+	}
+
+	private async applyTestState(candidates: Set<string>, enabledUnderTest: Set<string>) {
+		await this.enableItems(enabledUnderTest);
+		const toDisable = [...candidates].filter(id => !enabledUnderTest.has(id));
+		await this.disableItems(toDisable);
+	}
+
+	private getDisplayName(id: string) {
+		return this.getAllSortedItems().find(item => item.id === id)?.name ?? id;
 	}
 
 	getControlContainer(tab?: SettingsTab) {
-		tab ??= this.tab;
-		return queryText(tab.containerEl, ".setting-item-heading", tab.heading).querySelector(".setting-item-control") as HTMLElement;
-	}
-
-	getReloadButton(tab?: SettingsTab) {
-		tab ??= this.mode2Tab.get(this.mode);
-		const controls = this.getControlContainer(tab);
-		return controls.find(`[aria-label="${tab.reloadLabel}"]`) as HTMLDivElement;
+		const currentTab = tab ?? this.tab;
+		if (!currentTab) return undefined;
+		const heading = queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading);
+		return heading?.querySelector(".setting-item-control") as HTMLElement | undefined;
 	}
 
 	getSettingsTab(id: string) {
 		return this.app.setting.settingTabs.filter(t => t.id === id).shift() as Partial<SettingsTab>;
 	}
 
-	private createLevelText() {
+	private createStatusText() {
 		const span = document.createElement("span");
-		span.setText(`Level: ${this.level}`);
+		span.style.whiteSpace = "pre-line";
+		span.style.marginLeft = "12px";
 		return span;
 	}
 
-	private overrideDisplay(mode: Mode, tab: SettingsTab, old: any) {
+	private getButtonLabel(id: keyof divideAndConquer) {
+		switch (id) {
+			case "enableAll": return this.getSession().isRunning ? "Reset" : "Enable All";
+			case "startBisect": return "Start";
+			case "answerYes": return "Yes";
+			case "answerNo": return "No";
+			default: return String(id);
+		}
+	}
+
+	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
+		if (id === "enableAll" && this.getSession().isRunning) return "resetBisect";
+		return id;
+	}
+
+	private updateControlState() {
+		const controls = this.controls;
+		if (controls.length !== 5) return;
+
+		const primary = controls[0] as HTMLButtonElement;
+		const start = controls[1] as HTMLButtonElement;
+		const yes = controls[2] as HTMLButtonElement;
+		const no = controls[3] as HTMLButtonElement;
+		const text = controls[4] as HTMLSpanElement;
+
+		const session = this.getSession();
+		primary.setText(this.getButtonLabel("enableAll"));
+		primary.ariaLabel = session.isRunning ? "Reset bisect and restore previous states" : "Enable all items";
+
+		start.style.display = session.isRunning ? "none" : "";
+		yes.style.display = session.isRunning ? "" : "none";
+		no.style.display = session.isRunning ? "" : "none";
+
+		if (session.culpritId) {
+			text.setText(`The ${this.getSingularLabel()} possibly causing issues is: ${this.getDisplayName(session.culpritId)}`);
+			return;
+		}
+		if (!session.isRunning) {
+			text.setText(`Click Start to begin bisecting ${this.getPluralLabel()}.`);
+			return;
+		}
+		if (session.awaitingInitialAnswer) {
+			text.setText(`No changes yet. With your current ${this.getPluralLabel()} state, are you still having issues?`);
+			return;
+		}
+
+		text.setText(`The ${this.getPluralLabel()} below are enabled. Are you still having issues?`);
+	}
+
+	private overrideDisplay(mode: Mode, tab: SettingsTab, old: (...args: unknown[]) => void) {
 		const plugin = this;
-		return (function display(...args: any[]) {
+		return (function display(...args: unknown[]) {
 			plugin.setMode(mode);
 			plugin.refreshTab = () => {
-				console.log("refreshing tab", mode);
 				plugin.setMode(mode);
 				tab.reload().then(() => {
-					old.apply(tab, args); // render the tab after re-loading the plugins/snippets
-					plugin.addControls(); // add the controls back
+					old.apply(tab, args);
+					plugin.addControls();
 					plugin.colorizeIgnoredToggles();
-					// let reload = plugin.getReloadButton();
-					// reload.onClickEvent = () => plugin.refreshTab();
 				});
 			};
-			plugin.refreshTab();
+			plugin.refreshTab?.();
 		}).bind(plugin, tab);
 	}
 
-
 	private colorizeIgnoredToggles() {
 		const name2Toggle = this.createToggleMap(this.getItemEls());
-		// for now, regex filtering is only for plugins
 		const included = new Set([...(this.getIncludedItems())].map(m => m.name));
-		console.log('included', included, this.getIncludedItems(), name2Toggle);
 
 		for (const [name, toggle] of name2Toggle) {
-			// if the plugin is filtered by regex settings, we indicate this visually by coloring the toggle
-			if (!included?.has(name)) {
+			if (!included.has(name)) {
 				const colorToggle = () => {
-					if (toggle.classList.contains('is-enabled')) toggle.style.backgroundColor = this.enabledColor;
-					else toggle.style.backgroundColor = this.disabledColor;
+					if (toggle.classList.contains("is-enabled")) toggle.style.backgroundColor = this.enabledColor ?? "";
+					else toggle.style.backgroundColor = this.disabledColor ?? "";
 				};
 				colorToggle();
-				toggle.addEventListener('click', colorToggle);
-			}
-
-			const id = [...this.getAllItems()].find(p => p.name == name)?.id;
-			// if the plugin is in the snapshot, we indicate this visually by outlining
-			if (id && this.snapshot && this.snapshot.has(id)) {
-				toggle.style.outlineOffset = "1px";
-				toggle.style.outline = "outset";
+				toggle.addEventListener("click", colorToggle);
 			}
 		}
-
 	}
 
 	private createToggleMap(items: Element[]) {
 		const name2Toggle = new Map<string, HTMLDivElement>();
 		for (let i = 0; i < items.length; i++) {
 			const child = items[i];
-			const name = (child.querySelector(".setting-item-name") as HTMLDivElement).innerText;
-			const toggle = (child.querySelector(".setting-item-control")).querySelector('.checkbox-container') as HTMLDivElement;
-			if (name && toggle)
-				name2Toggle.set(name, toggle);
+			const name = (child.querySelector(".setting-item-name") as HTMLDivElement)?.innerText;
+			const toggle = child.querySelector(".setting-item-control")?.querySelector(".checkbox-container") as HTMLDivElement;
+			if (name && toggle) name2Toggle.set(name, toggle);
 		}
 		return name2Toggle;
 	}
 
 	private wrapCall(mode: Mode, key: keyof divideAndConquer) {
-		return this.wrapper(this[key] as Func);
+		return this.mode2Call.get(mode)?.(this[this.getButtonAction(key)] as Func);
 	}
-
-
-
 }
-

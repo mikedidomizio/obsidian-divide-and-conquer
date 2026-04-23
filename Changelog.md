@@ -1,3 +1,4 @@
+- 2026-04-23	Release 2.0.0 - Change button wording to help bisecting
 - 2022-02-18	release 0.4.0
 - 2022-02-18	added markdown-link-check
 - 2022-02-18	Merge pull request #3 from valentine195/master

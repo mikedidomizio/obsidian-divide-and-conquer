@@ -1,7 +1,16 @@
-import { App, PluginManifest, PluginSettingTab, Setting, TextAreaComponent, ToggleComponent } from "obsidian";
+import { App, PluginSettingTab, Setting, TextAreaComponent, ToggleComponent } from "obsidian";
 
 import type { Mode } from "./util";
 import divideAndConquer from "./main";
+
+export interface PersistedBisectSession {
+  isRunning: boolean;
+  candidates: string[];
+  enabledUnderTest: string[];
+  culpritId: string | undefined;
+  enabledBeforeBisect: string[] | undefined;
+  awaitingInitialAnswer: boolean;
+}
 
 export interface DACSettings {
     pluginFilterRegexes: string[];
@@ -11,9 +20,10 @@ export interface DACSettings {
     filterUsingDescription: boolean,
     initializeAfterPluginChanges: boolean,
     reloadAfterPluginChanges: boolean,
-    disabledStates: string;
-    snapshots: string;
-    levels: string;
+    disabledStates: string | undefined;
+    snapshots: string | undefined;
+    levels: string | undefined;
+	 bisectSessions: Partial<Record<Mode, PersistedBisectSession>>;
 }
 
 export const DEFAULT_SETTINGS: DACSettings = {
@@ -30,6 +40,7 @@ export const DEFAULT_SETTINGS: DACSettings = {
     disabledStates: undefined,
     snapshots: undefined,
     levels: undefined,
+	 bisectSessions: {},
 };
 
 interface  TextAreaArgs { mode: Mode, container: Setting, placeholder?: string, value?: string, disabledArea?:TextAreaComponent }
@@ -57,7 +68,7 @@ export class DACSettingsTab extends PluginSettingTab {
             .addToggle((toggle) => toggle.setValue(this.plugin.settings.initializeAfterPluginChanges)
                     .onChange(async (value) => {
                         this.plugin.settings.initializeAfterPluginChanges = value;
-                        await this.plugin.saveData(false);
+                    await this.plugin.saveData();
                     })
             );
 
@@ -66,13 +77,13 @@ export class DACSettingsTab extends PluginSettingTab {
             .addToggle((toggle) => toggle.setValue(this.plugin.settings.reloadAfterPluginChanges)
                     .onChange(async (value) => {
                         this.plugin.settings.reloadAfterPluginChanges = value;
-                        await this.plugin.saveData(false);
+                    await this.plugin.saveData();
                     })
             );
         containerEl.createEl('hr').createEl('br');
 
 
-        containerEl.createEl('h3', { text: 'Changing any of the following settings will restore plugins to the original state.' });
+            containerEl.createEl('h3', { text: 'Changes below affect filtering and bisect candidate selection.' });
 
         new Setting(containerEl)
             .setName('Use Filters on Plugin Display Names')
@@ -142,23 +153,23 @@ export class DACSettingsTab extends PluginSettingTab {
         });
     }
 
-    addTextArea({ mode, container, placeholder, value, disabledArea }: TextAreaArgs) {
-        let ret: TextAreaComponent;
+      addTextArea({ mode, container, placeholder, value, disabledArea }: TextAreaArgs) {
+        let ret!: TextAreaComponent;
         const reset = (area: TextAreaComponent, mode: Mode) => {
             this.plugin.saveData();
-            area.setPlaceholder(
-                [...(this.plugin.getIncludedItems(mode))].map(p => p.name).join('\n')
-            ).setDisabled(true);
+                  area.setPlaceholder(
+                    [...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
+                  ).setDisabled(true);
         };
 
         container.addTextArea((textArea) => {
             ret = textArea;
             textArea.inputEl.setAttr('rows', 10);
             textArea.inputEl.style.width = '100%';
-            if (value) textArea.setPlaceholder(placeholder).setValue(value);
-            textArea.setPlaceholder(
-                placeholder ?? [...(this.plugin.getIncludedItems(mode))].map(p => p.name).join('\n')
-            ).setDisabled(!disabledArea);
+                  if (value) textArea.setPlaceholder(placeholder ?? "").setValue(value);
+                  textArea.setPlaceholder(
+                    placeholder ?? [...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
+                  ).setDisabled(!disabledArea);
 
             if (disabledArea) {
                 this.toggles.forEach(t => t.toggleEl.onClickEvent(reset.bind(this, disabledArea, mode)));

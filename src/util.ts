@@ -42,7 +42,6 @@ export function getSnippetItems(tab: SettingsTab) {
 	const res = Array.from(tab.containerEl.children).filter(
 		(child) => !(child.compareDocumentPosition(lastHeading) & Node.DOCUMENT_POSITION_FOLLOWING)
 	);
-	console.log(res, headings);
 	return res;
 }
 
