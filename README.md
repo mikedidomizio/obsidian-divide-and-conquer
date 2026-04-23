@@ -1,16 +1,13 @@
 # ⚔️ Divide & Conquer
 
-<!-- markdownlint-disable-next-line MD013 -->
-![Total Downloads](https://img.shields.io/github/downloads/chrisgrieser/obsidian-divide-and-conquer/total?label=Total%20Downloads&style=plastic)
-<!-- markdownlint-disable-next-line MD013 -->
-![Latest Release](https://img.shields.io/github/v/release/chrisgrieser/obsidian-divide-and-conquer?label=Latest%20Release&style=plastic)
-<!-- markdownlint-disable-next-line MD013 -->
+![Total Downloads](https://img.shields.io/github/downloads/mikedidomizio/obsidian-divide-and-conquer/total?label=Total%20Downloads&style=plastic)
+![Latest Release](https://img.shields.io/github/v/release/mikedidomizio/obsidian-divide-and-conquer?label=Latest%20Release&style=plastic)
 [![Changelog](https://img.shields.io/badge/changelog-click%20here-FFE800?style=plastic)](Changelog.md)
 
 An [Obsidian](https://obsidian.md/) plugin that provides commands for bulk
 enabling/disabling of plugins and CSS Snippets. This allows you to quickly
 find which plugins are causing bugs or performance problems.
-![DAC Snippet Demo](https://user-images.githubusercontent.com/31261158/201551797-0a278ec8-e6e9-4285-b633-bfec015e1c15.gif)
+![DAC Snippet Demo](./assets/readme-intro.gif)
 
 ## How this helps with Debugging
 You have a problem with Obsidian and have confirmed that the issue goes away
