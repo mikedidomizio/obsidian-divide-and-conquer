@@ -23,7 +23,7 @@ export interface DACSettings {
     disabledStates: string | undefined;
     snapshots: string | undefined;
     levels: string | undefined;
-	bisectSessions: Partial<Record<Mode, PersistedBisectSession>>;
+	 bisectSessions: Partial<Record<Mode, PersistedBisectSession>>;
 }
 
 export const DEFAULT_SETTINGS: DACSettings = {
@@ -40,7 +40,7 @@ export const DEFAULT_SETTINGS: DACSettings = {
     disabledStates: undefined,
     snapshots: undefined,
     levels: undefined,
-	bisectSessions: {},
+	 bisectSessions: {},
 };
 
 interface  TextAreaArgs { mode: Mode, container: Setting, placeholder?: string, value?: string, disabledArea?:TextAreaComponent }

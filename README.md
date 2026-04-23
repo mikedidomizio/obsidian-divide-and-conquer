@@ -24,9 +24,12 @@ plugins, to make the power user's life easier.
 ## Commands Added
 For either Plugin/Snippet:
 - Enable All - enable every plugin/snippet
-- Bisect Start - begin the bisect process by enabling one half and disabling the other
-- Bisect Yes - issue is still present with the currently enabled half; keep narrowing this side
-- Bisect No - issue is not present with the currently enabled half; eliminate that side and keep narrowing the remaining candidates
+- Bisect Start - begin the bisect process by enabling one half
+and disabling the other
+- Bisect Yes - issue is still present with the currently enabled half;
+ keep narrowing this side
+- Bisect No - issue is not present with the currently enabled half;
+ eliminate that side and keep narrowing the remaining candidates
 
 When only one possibility remains, DAC shows:
 `The plugin possibly causing issues is: ...`
@@ -49,7 +52,8 @@ The plugin is available via Obsidian's Community Plugin Browser:
 *"Divide & Conquer"*
 
 ## Testing
-- `tests/bisect.test.ts` covers the bisect user flow (`Start`, `Yes`, `No`, `Enable All`) for plugins and CSS snippets.
+- `tests/bisect.test.ts` covers the bisect user flow
+(`Start`, `Yes`, `No`, `Enable All`) for plugins and CSS snippets.
 - `tests/util.test.ts` covers utility behavior and UI-adjacent helper logic.
 - Prefer user-visible test names that read like actions and outcomes.
 
