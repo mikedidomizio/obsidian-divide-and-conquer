@@ -67,6 +67,7 @@ The plugin is available via Obsidian's Community Plugin Browser:
   refresh and the buttons reappear. You can also close and reoppen settings.
 
 ## Credits
-Originally created by [chrisgrieser](https://github.com/chrisgrieser/) aka
-pseudometa, now maintained by
+- Currently maintained by [mikedidomizio](https://github.com/mikedidomizio)
+- Originally created by [chrisgrieser](https://github.com/chrisgrieser/) aka
+pseudometa, previously maintained by
 [geoffreysflaminglasersword](https://github.com/geoffreysflaminglasersword).
