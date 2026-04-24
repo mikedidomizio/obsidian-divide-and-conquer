@@ -55,15 +55,27 @@ The plugin is available via Obsidian's Community Plugin Browser:
 - `tests/bisect.test.ts` covers the bisect user flow
 (`Start`, `Yes`, `No`, `Enable All`) for plugins and CSS snippets.
 - `tests/util.test.ts` covers utility behavior and UI-adjacent helper logic.
-- Prefer user-visible test names that read like actions and outcomes.
+- Prefer user-visible test names that read like user action and outcomes.
 
 ## Development
 - `npm run lint` — run all configured lint checks.
 - `npm run lint:fix` — run all configured lint checks and apply available auto-fixes.
 
+## Publishing
+
+To publish a new release to the Obsidian community plugins, create a git tag
+and push it to this remote repository.
+This will trigger the GitHub Actions release workflow, which builds the plugin and
+creates a GitHub release with the required files (`main.js`, `manifest.json`, `styles.css`).
+
+```sh
+git tag 1.0.0
+git push origin 1.0.0
+```
+
 ## Bugs
 - Occasionally, for one reason or another (like updating plugins) a refresh
-  won't be triggered by obsidian and the buttons may dissappear. Clicking on
+  won't be triggered by obsidian and the buttons may disappear. Clicking on
   the community plugins tab (or appearance if you're in snippets) triggers the
   refresh and the buttons reappear. You can also close and reoppen settings.
 
