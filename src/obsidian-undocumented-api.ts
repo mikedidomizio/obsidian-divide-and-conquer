@@ -1,10 +1,8 @@
-import { PluginManifest } from "obsidian";
-
 declare module "obsidian" {
 	interface App {
 		plugins: {
 			plugins: string[];
-			manifests: {[id:string]:PluginManifest};
+			manifests: {[id:string]: { id: string; name: string; author?: string; description?: string }};
 			enabledPlugins: Set<string>;
 			disablePluginAndSave: (id: string) => Promise<boolean>;
 			enablePluginAndSave: (id: string) => Promise<boolean>;
@@ -25,18 +23,19 @@ declare module "obsidian" {
 			settingTabs: {id:string, containerEl:HTMLElement}[];
 		}
 	}
+
 	interface View {
 		renderer: {
 			worker: Worker,
 			autoRestored: boolean,
-			nodes: any[],
+			nodes: unknown[],
 		};
 		dataEngine: Engine;
 		engine: Engine;
 	}
 
 	interface Engine {
-		displayOptions: any,
+		displayOptions: unknown,
 		forceOptions: {
 			optionListeners: {
 				centerStrength: (value: number) => void,
@@ -47,13 +46,13 @@ declare module "obsidian" {
 		},
 	}
 
-    interface SettingsTab {
-        containerEl: HTMLElement;
-        navEl: HTMLElement;
-        display(...args: any[]): void;
-        hide(): any;
+	interface SettingsTab {
+		containerEl: HTMLElement;
+		navEl: HTMLElement;
+		display(...args: unknown[]): void;
+		hide(): unknown;
 		reload(): Promise<void>;
 		heading:string;
 		reloadLabel: string;
-    }
+	}
 }

@@ -1,9 +1,10 @@
-import { Command, Notice, Plugin, SettingsTab } from "obsidian";
+import { Notice, Plugin, SettingsTab } from "obsidian";
 import type { Composed, Func, Mode } from "./util";
 import { DACSettingsTab, DEFAULT_SETTINGS, type PersistedBisectSession } from "./settings";
 import { Modes, compose, getSnippetItems, makeArray, queryText, removeSetupDebugNotice, simpleCalc } from "./util";
 import { around } from "monkey-around";
 
+// eslint-disable-next-line
 const tinycolor = require("tinycolor2");
 
 const CSS_DELAY = 200;
@@ -71,9 +72,7 @@ export default class divideAndConquer extends Plugin {
 	mode2Session: Map<Mode, BisectSession> = new Map();
 
 	get controls() { return this.mode2Controls.get(this.mode) ?? []; }
-	set controls(c) { this.mode2Controls.set(this.mode, c ?? []); }
 	get tab() { return this.mode2Tab.get(this.mode); }
-	get wrapper() { return this.mode2Call.get(this.mode); }
 	get refreshTab(): (() => void) | undefined { return this.mode2Refresh.get(this.mode); }
 	set refreshTab(f: () => void) { this.mode2Refresh.set(this.mode, f); }
 
@@ -242,17 +241,21 @@ export default class divideAndConquer extends Plugin {
 
 	private addCommands() {
 		for (const command of pluginCommands) {
+			const callback = this.mode2Call.get("plugins")?.(this[command.method] as Func);
+			if (!callback) continue;
 			this.addCommand({
 				id: command.id,
 				name: command.name,
-				callback: this.mode2Call.get("plugins")?.(this[command.method] as Func),
+				callback,
 			});
 		}
 		for (const command of snippetCommands) {
+			const callback = this.mode2Call.get("snippets")?.(this[command.method] as Func);
+			if (!callback) continue;
 			this.addCommand({
 				id: command.id,
 				name: command.name,
-				callback: this.mode2Call.get("snippets")?.(this[command.method] as Func),
+				callback,
 			});
 		}
 	}
@@ -587,6 +590,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private overrideDisplay(mode: Mode, tab: SettingsTab, old: (...args: unknown[]) => void) {
+		// eslint-disable-next-line
 		const plugin = this;
 		return (function display(...args: unknown[]) {
 			plugin.setMode(mode);
