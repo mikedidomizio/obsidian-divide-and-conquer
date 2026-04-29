@@ -87,20 +87,28 @@ export default class divideAndConquer extends Plugin {
 		const notice = () => {
 			removeSetupDebugNotice();
 			const session = this.getSession();
-			if (!session.culpritId) return;
+			if (!session.culpritId) {
+				return;
+			}
 			const label = this.mode === "plugins" ? "plugin" : "CSS snippet";
 			new Notice(`Possible ${label} culprit: ${this.getDisplayName(session.culpritId)}`);
 		};
 
 		const maybeReload = async () => {
-			if (this.consumeReloadSkipToken()) return;
-			if (!this.settings.reloadAfterPluginChanges) return;
+			if (this.consumeReloadSkipToken()) {
+				return;
+			}
+			if (!this.settings.reloadAfterPluginChanges) {
+				return;
+			}
 			await this.saveData();
 			setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
 		};
 
 		const maybeInit = async () => {
-			if (!this.settings.initializeAfterPluginChanges) return;
+			if (!this.settings.initializeAfterPluginChanges) {
+				return;
+			}
 			await this.app.plugins.initialize();
 		};
 
@@ -217,7 +225,9 @@ export default class divideAndConquer extends Plugin {
 
 	private addControls() {
 		const container = this.getControlContainer();
-		if (!container) return;
+		if (!container) {
+			return;
+		}
 
 		if (!this.mode2Controls.has(this.mode)) {
 			const buttons = UIButtons.map((button) => {
@@ -242,7 +252,9 @@ export default class divideAndConquer extends Plugin {
 	private addCommands() {
 		for (const command of pluginCommands) {
 			const callback = this.mode2Call.get("plugins")?.(this[command.method] as Func);
-			if (!callback) continue;
+			if (!callback) {
+				continue;
+			}
 			this.addCommand({
 				id: command.id,
 				name: command.name,
@@ -251,7 +263,9 @@ export default class divideAndConquer extends Plugin {
 		}
 		for (const command of snippetCommands) {
 			const callback = this.mode2Call.get("snippets")?.(this[command.method] as Func);
-			if (!callback) continue;
+			if (!callback) {
+				continue;
+			}
 			this.addCommand({
 				id: command.id,
 				name: command.name,
@@ -385,7 +399,9 @@ export default class divideAndConquer extends Plugin {
 
 	public getExcludedItems(mode?: Mode, outIncluded: boolean = false) {
 		const oldMode = this.mode;
-		if (mode) this.setMode(mode);
+		if (mode) {
+			this.setMode(mode);
+		}
 
 		const filtered = [...this.getAllItems()].filter(
 			(item) => outIncluded !== this.getFilters().some(
@@ -396,7 +412,9 @@ export default class divideAndConquer extends Plugin {
 			),
 		);
 
-		if (mode) this.setMode(oldMode);
+		if (mode) {
+			this.setMode(oldMode);
+		}
 		return new Set(filtered);
 	}
 
@@ -468,11 +486,16 @@ export default class divideAndConquer extends Plugin {
 
 	private async persistSession(mode: Mode = this.mode) {
 		const session = this.mode2Session.get(mode);
-		if (!session) return;
+		if (!session) {
+			return;
+		}
 
 		const persisted = { ...(this.settings.bisectSessions ?? {}) };
-		if (this.isSessionEmpty(session)) delete persisted[mode];
-		else persisted[mode] = this.serializeSession(session);
+		if (this.isSessionEmpty(session)) {
+			delete persisted[mode];
+		} else {
+			persisted[mode] = this.serializeSession(session);
+		}
 		this.settings.bisectSessions = persisted;
 		await this.saveData();
 	}
@@ -487,7 +510,9 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private consumeReloadSkipToken() {
-		if (!this.skipNextReload) return false;
+		if (!this.skipNextReload) {
+			return false;
+		}
 		this.skipNextReload = false;
 		return true;
 	}
@@ -524,7 +549,9 @@ export default class divideAndConquer extends Plugin {
 
 	getControlContainer(tab?: SettingsTab) {
 		const currentTab = tab ?? this.tab;
-		if (!currentTab) return undefined;
+		if (!currentTab) {
+			return undefined;
+		}
 		const heading = queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading);
 		return heading?.querySelector(".setting-item-control") as HTMLElement | undefined;
 	}
@@ -551,13 +578,17 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
-		if (id === "enableAll" && this.getSession().isRunning) return "resetBisect";
+		if (id === "enableAll" && this.getSession().isRunning) {
+			return "resetBisect";
+		}
 		return id;
 	}
 
 	private updateControlState() {
 		const controls = this.controls;
-		if (controls.length !== 5) return;
+		if (controls.length !== 5) {
+			return;
+		}
 
 		const primary = controls[0] as HTMLButtonElement;
 		const start = controls[1] as HTMLButtonElement;
@@ -613,8 +644,11 @@ export default class divideAndConquer extends Plugin {
 		for (const [name, toggle] of name2Toggle) {
 			if (!included.has(name)) {
 				const colorToggle = () => {
-					if (toggle.classList.contains("is-enabled")) toggle.style.backgroundColor = this.enabledColor ?? "";
-					else toggle.style.backgroundColor = this.disabledColor ?? "";
+					if (toggle.classList.contains("is-enabled")) {
+						toggle.style.backgroundColor = this.enabledColor ?? "";
+					} else {
+						toggle.style.backgroundColor = this.disabledColor ?? "";
+					}
 				};
 				colorToggle();
 				toggle.addEventListener("click", colorToggle);
@@ -628,7 +662,9 @@ export default class divideAndConquer extends Plugin {
 			const child = items[i];
 			const name = (child.querySelector(".setting-item-name") as HTMLDivElement)?.innerText;
 			const toggle = child.querySelector(".setting-item-control")?.querySelector(".checkbox-container") as HTMLDivElement;
-			if (name && toggle) name2Toggle.set(name, toggle);
+			if (name && toggle) {
+				name2Toggle.set(name, toggle);
+			}
 		}
 		return name2Toggle;
 	}

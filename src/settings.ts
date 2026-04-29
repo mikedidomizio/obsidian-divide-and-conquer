@@ -166,7 +166,9 @@ export class DACSettingsTab extends PluginSettingTab {
             ret = textArea;
             textArea.inputEl.setAttr('rows', 10);
             textArea.inputEl.style.width = '100%';
-                  if (value) textArea.setPlaceholder(placeholder ?? "").setValue(value);
+                  if (value) {
+                      textArea.setPlaceholder(placeholder ?? "").setValue(value);
+                  }
                   textArea.setPlaceholder(
                     placeholder ?? [...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
                   ).setDisabled(!disabledArea);

@@ -4,7 +4,9 @@ import { SettingsTab } from "obsidian";
 export function simpleCalc(str: string) {
 	const calcRegex = /calc\((\d+)%\s*([+-])\s*(\d+)%\)/;
 	const match = str.match(calcRegex);
-	if (!match) return str;
+	if (!match) {
+		return str;
+	}
 	const [, a, op, b] = match;
 	const result = op === "+" ? +a + +b : +a - +b;
 	return str.replace(calcRegex, `${result}%`);
@@ -14,7 +16,9 @@ export function removeSetupDebugNotice() {
 	const notices = document.querySelectorAll('.notice') as NodeListOf<HTMLElement>;
 	for (let i = 0; i < notices.length; i++) {
 		const notice = notices[i];
-		if (notice?.innerText.includes('plugin setup')) notice.remove();
+		if (notice?.innerText.includes('plugin setup')) {
+			notice.remove();
+		}
 	}
 }
 
