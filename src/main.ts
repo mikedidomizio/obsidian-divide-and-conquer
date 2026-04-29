@@ -401,7 +401,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	async enableItems(items: string[] | Set<string>) {
-		const list = items instanceof Set ? [...items] : [...items];
+		const list = [...items];
 		for (const id of list.reverse()) {
 			await this.enableItem(id);
 		}
@@ -409,7 +409,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	async disableItems(items: string[] | Set<string>) {
-		const list = items instanceof Set ? [...items] : [...items];
+		const list = [...items];
 		for (const id of list) {
 			await this.disableItem(id);
 		}
