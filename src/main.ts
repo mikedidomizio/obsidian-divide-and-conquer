@@ -48,6 +48,9 @@ const UIButtons: DACButton[] = [
 	{ id: "answerNo", tooltip: "Issue does not happen" },
 ];
 
+const numberOfTextElements = 1
+const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements
+
 export default class divideAndConquer extends Plugin {
 	settings!: typeof DEFAULT_SETTINGS;
 	manifests = this.app.plugins.manifests;
@@ -586,15 +589,10 @@ export default class divideAndConquer extends Plugin {
 
 	private updateControlState() {
 		const controls = this.controls;
-		if (controls.length !== 5) {
+		if (controls.length !== numberOfButtonsAndTextElements) {
 			return;
 		}
-
-		const primary = controls[0] as HTMLButtonElement;
-		const start = controls[1] as HTMLButtonElement;
-		const yes = controls[2] as HTMLButtonElement;
-		const no = controls[3] as HTMLButtonElement;
-		const text = controls[4] as HTMLSpanElement;
+		const [primary, start, yes, no, text] = controls;
 
 		const session = this.getSession();
 		primary.setText(this.getButtonLabel("enableAll"));
