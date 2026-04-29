@@ -23,6 +23,7 @@ export default tseslint.config(
 			}
 		},
 		rules: {
+			"curly": "error",
 			"no-console": "off"
 		}
 	}
