@@ -24,7 +24,8 @@ export default tseslint.config(
 		},
 		rules: {
 			"curly": "error",
-			"no-console": "off"
+			"no-console": "off",
+			"no-magic-numbers": "warn",
 		}
 	}
 );
