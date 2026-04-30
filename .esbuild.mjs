@@ -14,7 +14,7 @@ const result = await esbuild
 	.build({
 		entryPoints: ["src/main.ts"],
 		banner: { js: banner + "\n" },
-		outfile: "main.js",
+		outfile: "dist/main.js",
 		bundle: true,
 		// biome-ignore format: no need to inspect this regularly
 		external: ["obsidian", "electron", "@codemirror/autocomplete", "@codemirror/collab", "@codemirror/commands", "@codemirror/language", "@codemirror/lint", "@codemirror/search", "@codemirror/state", "@codemirror/view", "@lezer/common", "@lezer/highlight", "@lezer/lr", ...builtins],
@@ -39,4 +39,6 @@ if (result.metafile) {
 
 // FIX prevent Obsidian from removing the source map when using dev build
 // https://forum.obsidian.md/t/source-map-trimming-in-dev-builds/87612
-if (!production) appendFileSync(import.meta.dirname + "/main.js", "\n/* nosourcemap */");
+if (!production) {
+	appendFileSync(import.meta.dirname + "/dist/main.js", "\n/* nosourcemap */");
+}

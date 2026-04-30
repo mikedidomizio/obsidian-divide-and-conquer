@@ -2,11 +2,13 @@
 	"name": "obsidian-divide-and-conquer",
 	"version": "2.0.0",
 	"description": "An Obsidian plugin that provides commands for bulk enabling/disabling of plugins. Intended for power users with many plugins.",
-	"main": "main.js",
+	"main": "dist/main.js",
 	"scripts": {
+		"dev": "npm run build && npm run copy-over && esbuild src/main.ts --outfile=dist/main.js --watch",
 		"build": "node .esbuild.mjs",
-		"build:production": "npm run build -- production",
-		"build:analyze": "npm run build -- analyze",
+		"build:production": "npm run build -- production && npm run copy-over",
+		"build:analyze": "npm run build -- analyze && npm run copy-over",
+		"copy-over": "cp manifest.json dist/ && cp styles.css dist/",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"coverage": "vitest run --coverage",
@@ -41,5 +43,8 @@
 		"monkey-around": "^3.0.0",
 		"tinycolor2": "^1.4.2",
 		"typescript-super-set": "^1.0.0"
+	},
+	"engines": {
+		"node": ">=24.14.1"
 	}
 }

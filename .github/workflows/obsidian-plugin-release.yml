@@ -11,22 +11,24 @@ env:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     permissions: { contents: write }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
-        with: { node-version: "22.x" }
+        with:
+          node-version: 24.x
+          cache: npm
 
       - name: Build plugin
         run: |
           npm install
           npm run build:production
           mkdir ${{ env.PLUGIN_NAME }}
-          cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}
+          cp dist/main.js dist/manifest.json dist/styles.css ${{ env.PLUGIN_NAME }}
           zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
 
       - name: Release
@@ -36,6 +38,6 @@ jobs:
           generate_release_notes: true
           files: |
             ${{ env.PLUGIN_NAME }}.zip
-            main.js
-            manifest.json
-            styles.css
+            dist/main.js
+            dist/manifest.json
+            dist/styles.css
