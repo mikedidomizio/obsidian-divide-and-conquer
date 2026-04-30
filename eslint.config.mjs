@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default tseslint.config(
-	{ ignores: ["node_modules/**", "main.js"] },
+	{ ignores: ["node_modules/**", "dist/main.js"] },
 	js.configs.recommended,
 	...tseslint.configs.recommended,
 	{
