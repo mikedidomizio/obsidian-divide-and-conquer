@@ -63,6 +63,7 @@ if (!HTMLElement.prototype.empty) {
 
 // Obsidian adds HTMLElement.prototype.createEl
 if (!HTMLElement.prototype.createEl) {
+	// @ts-ignore
 	HTMLElement.prototype.createEl = function <K extends keyof HTMLElementTagNameMap>(
 		tag: K,
 		attrs?: { text?: string; cls?: string } & Partial<HTMLElementTagNameMap[K]>,
