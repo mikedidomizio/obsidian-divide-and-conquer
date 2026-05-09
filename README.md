@@ -2,6 +2,7 @@
 
 ![Total Downloads](https://img.shields.io/github/downloads/mikedidomizio/obsidian-divide-and-conquer/total?label=Total%20Downloads&style=plastic)
 ![Latest Release](https://img.shields.io/github/v/release/mikedidomizio/obsidian-divide-and-conquer?label=Latest%20Release&style=plastic)
+[![Obsidian Plugin Audit](https://img.shields.io/badge/Obsidian%20Plugin%20Audit-99%25-purple?style=plastic&logo=obsidian)](https://obsidianpluginaudit.com/audit/53feb91b-e842-468f-95e4-c5afce1983eb)
 [![Changelog](https://img.shields.io/badge/changelog-click%20here-FFE800?style=plastic)](Changelog.md)
 
 An [Obsidian](https://obsidian.md/) plugin that provides commands for bulk
