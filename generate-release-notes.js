@@ -173,6 +173,15 @@ async function attachGitHubUsers(commits, slug) {
 	}
 }
 
+function toGitHubProfileUrl(githubUser) {
+	if (!githubUser || !githubUser.startsWith("@")) {
+		return undefined;
+	}
+
+	const login = githubUser.slice(1);
+	return login ? `https://github.com/${login}` : undefined;
+}
+
 function buildReleaseNotes(commits, title, compareUrl) {
 	const sections = new Map();
 	const order = ["Features", "Fixes", "Refactors", "Docs", "Tests", "Maintenance", "Other"];
@@ -180,8 +189,14 @@ function buildReleaseNotes(commits, title, compareUrl) {
 	for (const commit of commits) {
 		const { section, text } = classifyCommit(commit.subject);
 		const existing = sections.get(section) || [];
+		const commitRef = commit.commitUrl
+			? `[${commit.shortSha}](${commit.commitUrl})`
+			: commit.shortSha;
+		const authorRef = commit.githubUserUrl
+			? `[${commit.githubUser}](${commit.githubUserUrl})`
+			: commit.githubUser;
 		const prSuffix = commit.prUrl && commit.prNumber ? ` in [#${commit.prNumber}](${commit.prUrl})` : "";
-		existing.push(`- ${text} (${commit.shortSha}) by ${commit.githubUser}${prSuffix}`);
+		existing.push(`- ${text} (${commitRef}) by ${authorRef}${prSuffix}`);
 		sections.set(section, existing);
 	}
 
@@ -253,7 +268,14 @@ async function main() {
 
 	const remoteUrl = git(["config", "--get", "remote.origin.url"], { allowFailure: true });
 	const slug = parseRepoSlug(remoteUrl);
+	for (const commit of commits) {
+		commit.commitUrl = slug ? `https://github.com/${slug}/commit/${commit.sha}` : undefined;
+		commit.githubUserUrl = toGitHubProfileUrl(commit.githubUser);
+	}
 	await attachGitHubUsers(commits, slug);
+	for (const commit of commits) {
+		commit.githubUserUrl = toGitHubProfileUrl(commit.githubUser);
+	}
 	const compareUrl = slug ? `https://github.com/${slug}/compare/${fromRef}...${toRef}` : "";
 
 	console.log(buildReleaseNotes(commits, options.title, compareUrl));
