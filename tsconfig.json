@@ -1,6 +1,3 @@
-// DOCS https://www.typescriptlang.org/tsconfig
-//──────────────────────────────────────────────────────────────────────────────
-
 {
 	"compilerOptions": {
 		"baseUrl": ".",
