@@ -4,18 +4,19 @@ on:
   push:
     tags: ["*"]
 
-env:
-  PLUGIN_NAME: ${{ github.event.repository.name }}
-
-#───────────────────────────────────────────────────────────────────────────────
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions: { contents: write }
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -27,17 +28,33 @@ jobs:
         run: |
           npm install
           npm run build:production
-          mkdir ${{ env.PLUGIN_NAME }}
-          cp dist/main.js dist/manifest.json dist/styles.css ${{ env.PLUGIN_NAME }}
-          zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Attest release assets
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          generate_release_notes: true
-          files: |
-            ${{ env.PLUGIN_NAME }}.zip
+          subject-path: |
             dist/main.js
             dist/manifest.json
             dist/styles.css
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+
+          # Previous reachable tag before current tag commit
+          prev_tag="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)"
+
+          if [ -z "$prev_tag" ]; then
+            echo "::error::No previous tag found before $tag"
+            exit 1
+          fi
+
+          echo "Generating notes from $prev_tag..$tag"
+          node generate-release-notes.js --from "$prev_tag" --to "$tag" > release-notes.md
+
+          gh release create "$tag" \
+            --title="$tag" \
+            --notes-file release-notes.md \
+            dist/main.js dist/manifest.json dist/styles.css
