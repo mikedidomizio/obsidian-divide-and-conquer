@@ -1,4 +1,4 @@
-import { SettingsTab } from "obsidian";
+import {SettingsTab} from "obsidian";
 
 // accepts a string and checks if it is a calc expression (limited to percentages and addition/subtraction) and returns the resulting string
 export function simpleCalc(str: string) {
@@ -22,12 +22,12 @@ export function removeSetupDebugNotice() {
 	}
 }
 
-export function queryText(el:HTMLElement, selector:string, text:string) {
+export function queryText(el: HTMLElement, selector: string, text: string) {
 	return Array.from<HTMLElement>(el.querySelectorAll(selector)).find((heading) => heading.innerText.includes(text));
 }
 
 // compose takes any number of functions, binds them to "_this", and returns a function that calls them in order
-export const compose = (_this: unknown,...funcs: (() => void)[]) => () =>
+export const compose = (_this: unknown, ...funcs: (() => void)[]) => () =>
 	funcs.reduce((promise, func) => promise.then(func.bind(_this)), Promise.resolve());
 
 

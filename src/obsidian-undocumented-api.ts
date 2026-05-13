@@ -4,7 +4,14 @@ declare module "obsidian" {
 	interface App {
 		plugins: {
 			plugins: string[];
-			manifests: {[id:string]: { id: string; name: string; author?: string; description?: string }};
+			manifests: {
+				[id: string]: {
+					id: string;
+					name: string;
+					author?: string;
+					description?: string
+				}
+			};
 			enabledPlugins: Set<string>;
 			disablePluginAndSave: (id: string) => Promise<boolean>;
 			enablePluginAndSave: (id: string) => Promise<boolean>;
@@ -22,7 +29,7 @@ declare module "obsidian" {
 			loadSnippets(): Promise<void>;
 		};
 		setting: {
-			settingTabs: {id:string, containerEl:HTMLElement}[];
+			settingTabs: { id: string, containerEl: HTMLElement }[];
 		}
 	}
 
@@ -51,10 +58,14 @@ declare module "obsidian" {
 	interface SettingsTab {
 		containerEl: HTMLElement;
 		navEl: HTMLElement;
+
 		display(...args: unknown[]): void;
+
 		hide(): unknown;
+
 		reload(): Promise<void>;
-		heading:string;
+
+		heading: string;
 		reloadLabel: string;
 	}
 }

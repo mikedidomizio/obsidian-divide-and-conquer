@@ -1,16 +1,37 @@
-import { Notice, Plugin, SettingsTab } from "obsidian";
-import type { Composed, Func, Mode } from "./util";
-import { DACSettingsTab, DEFAULT_SETTINGS, type PersistedBisectSession } from "./settings";
-import { Modes, compose, getSnippetItems, makeArray, queryText, removeSetupDebugNotice, simpleCalc } from "./util";
-import { around } from "monkey-around";
+import {Notice, Plugin, SettingsTab} from "obsidian";
+import type {Composed, Func, Mode} from "./util";
+import {
+	DACSettingsTab,
+	DEFAULT_SETTINGS,
+	type PersistedBisectSession
+} from "./settings";
+import {
+	Modes,
+	compose,
+	getSnippetItems,
+	makeArray,
+	queryText,
+	removeSetupDebugNotice,
+	simpleCalc
+} from "./util";
+import {around} from "monkey-around";
 
 // eslint-disable-next-line
 const tinycolor = require("tinycolor2");
 
 const CSS_DELAY = 200;
 
-interface DACCommand { id: string; method: keyof divideAndConquer; name: string; }
-interface DACButton { id: keyof divideAndConquer; tooltip: string; }
+interface DACCommand {
+	id: string;
+	method: keyof divideAndConquer;
+	name: string;
+}
+
+interface DACButton {
+	id: keyof divideAndConquer;
+	tooltip: string;
+}
+
 interface NameNID {
 	name: string;
 	id: string;
@@ -28,24 +49,56 @@ interface BisectSession {
 }
 
 const pluginCommands: DACCommand[] = [
-	{ id: "plugin-enable-all", method: "enableAll", name: "Plugin Enable All - enable every installed plugin" },
-	{ id: "plugin-start-bisect", method: "startBisect", name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half" },
-	{ id: "plugin-answer-yes", method: "answerYes", name: "Plugin Bisect Yes - issue still happens with the currently enabled plugins" },
-	{ id: "plugin-answer-no", method: "answerNo", name: "Plugin Bisect No - issue does not happen with the currently enabled plugins" },
+	{
+		id: "plugin-enable-all",
+		method: "enableAll",
+		name: "Plugin Enable All - enable every installed plugin"
+	},
+	{
+		id: "plugin-start-bisect",
+		method: "startBisect",
+		name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half"
+	},
+	{
+		id: "plugin-answer-yes",
+		method: "answerYes",
+		name: "Plugin Bisect Yes - issue still happens with the currently enabled plugins"
+	},
+	{
+		id: "plugin-answer-no",
+		method: "answerNo",
+		name: "Plugin Bisect No - issue does not happen with the currently enabled plugins"
+	},
 ];
 
 const snippetCommands: DACCommand[] = [
-	{ id: "snippet-start-bisect", method: "startBisect", name: "Snippet Bisect Start - begin troubleshooting by splitting CSS snippets in half" },
-	{ id: "snippet-answer-yes", method: "answerYes", name: "Snippet Bisect Yes - issue still happens with the currently enabled CSS snippets" },
-	{ id: "snippet-answer-no", method: "answerNo", name: "Snippet Bisect No - issue does not happen with the currently enabled CSS snippets" },
-	{ id: "snippet-enable-all", method: "enableAll", name: "Snippet Enable All - enable every installed CSS snippet" },
+	{
+		id: "snippet-start-bisect",
+		method: "startBisect",
+		name: "Snippet Bisect Start - begin troubleshooting by splitting CSS snippets in half"
+	},
+	{
+		id: "snippet-answer-yes",
+		method: "answerYes",
+		name: "Snippet Bisect Yes - issue still happens with the currently enabled CSS snippets"
+	},
+	{
+		id: "snippet-answer-no",
+		method: "answerNo",
+		name: "Snippet Bisect No - issue does not happen with the currently enabled CSS snippets"
+	},
+	{
+		id: "snippet-enable-all",
+		method: "enableAll",
+		name: "Snippet Enable All - enable every installed CSS snippet"
+	},
 ];
 
 const UIButtons: DACButton[] = [
-	{ id: "enableAll", tooltip: "Enable all items" },
-	{ id: "startBisect", tooltip: "Start bisect" },
-	{ id: "answerYes", tooltip: "Issue still happens" },
-	{ id: "answerNo", tooltip: "Issue does not happen" },
+	{id: "enableAll", tooltip: "Enable all items"},
+	{id: "startBisect", tooltip: "Start bisect"},
+	{id: "answerYes", tooltip: "Issue still happens"},
+	{id: "answerNo", tooltip: "Issue does not happen"},
 ];
 
 const numberOfTextElements = 1
@@ -65,8 +118,13 @@ export default class divideAndConquer extends Plugin {
 	getFilters!: () => string[];
 
 	private _mode: Mode = "plugins";
-	public get mode(): Mode { return this._mode; }
-	private setMode(mode: Mode) { this._mode = mode; }
+	public get mode(): Mode {
+		return this._mode;
+	}
+
+	private setMode(mode: Mode) {
+		this._mode = mode;
+	}
 
 	mode2Call: Map<Mode, Composed> = new Map();
 	mode2Refresh: Map<Mode, () => void> = new Map();
@@ -74,10 +132,21 @@ export default class divideAndConquer extends Plugin {
 	mode2Controls: Map<Mode, HTMLElement[]> = new Map();
 	mode2Session: Map<Mode, BisectSession> = new Map();
 
-	get controls() { return this.mode2Controls.get(this.mode) ?? []; }
-	get tab() { return this.mode2Tab.get(this.mode); }
-	get refreshTab(): (() => void) | undefined { return this.mode2Refresh.get(this.mode); }
-	set refreshTab(f: () => void) { this.mode2Refresh.set(this.mode, f); }
+	get controls() {
+		return this.mode2Controls.get(this.mode) ?? [];
+	}
+
+	get tab() {
+		return this.mode2Tab.get(this.mode);
+	}
+
+	get refreshTab(): (() => void) | undefined {
+		return this.mode2Refresh.get(this.mode);
+	}
+
+	set refreshTab(f: () => void) {
+		this.mode2Refresh.set(this.mode, f);
+	}
 
 	override async onunload() {
 		await this.saveData();
@@ -142,7 +211,7 @@ export default class divideAndConquer extends Plugin {
 		});
 
 		for (const [mode, tab] of this.mode2Tab.entries()) {
-			this.register(around(tab, { display: this.overrideDisplay.bind(this, mode, tab) }));
+			this.register(around(tab, {display: this.overrideDisplay.bind(this, mode, tab)}));
 		}
 
 		this.getItemEls = () => {
@@ -163,7 +232,10 @@ export default class divideAndConquer extends Plugin {
 				case "plugins":
 					return new Set(Object.values(this.manifests));
 				case "snippets":
-					return new Set(this.app.customCss.snippets.map((s) => ({ name: s, id: s })));
+					return new Set(this.app.customCss.snippets.map((s) => ({
+						name: s,
+						id: s
+					})));
 			}
 		};
 
@@ -204,8 +276,10 @@ export default class divideAndConquer extends Plugin {
 
 		this.getFilters = () => {
 			switch (this.mode) {
-				case "plugins": return this.settings.pluginFilterRegexes;
-				case "snippets": return this.settings.snippetFilterRegexes;
+				case "plugins":
+					return this.settings.pluginFilterRegexes;
+				case "snippets":
+					return this.settings.snippetFilterRegexes;
 			}
 		};
 
@@ -493,7 +567,7 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 
-		const persisted = { ...(this.settings.bisectSessions ?? {}) };
+		const persisted = {...(this.settings.bisectSessions ?? {})};
 		if (this.isSessionEmpty(session)) {
 			delete persisted[mode];
 		} else {
@@ -572,11 +646,16 @@ export default class divideAndConquer extends Plugin {
 
 	private getButtonLabel(id: keyof divideAndConquer) {
 		switch (id) {
-			case "enableAll": return this.getSession().isRunning ? "Reset" : "Enable All";
-			case "startBisect": return "Start";
-			case "answerYes": return "Yes";
-			case "answerNo": return "No";
-			default: return String(id);
+			case "enableAll":
+				return this.getSession().isRunning ? "Reset" : "Enable All";
+			case "startBisect":
+				return "Start";
+			case "answerYes":
+				return "Yes";
+			case "answerNo":
+				return "No";
+			default:
+				return String(id);
 		}
 	}
 
