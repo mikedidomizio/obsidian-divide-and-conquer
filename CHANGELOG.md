@@ -1,5 +1,8 @@
 # Changelog
 
+## [2.0.1] - 2026-05-12
+- Addressed concerns raised from new Obsidian plugins site.
+
 ## [2.0.0] - 2026-04-23
 - Changed button wording and functionality to improve bisecting clarity.
 
