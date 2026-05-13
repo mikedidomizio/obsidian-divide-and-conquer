@@ -8,8 +8,6 @@
 		"module": "ESNext",
 		"target": "ES2022",
 		"lib": ["DOM", "ES5", "ES6", "ES7", "es2023"],
-
-		// SOURCE strictest tsconfig 2.0.0 https://github.com/tsconfig/bases/blob/main/bases/strictest.json
 		"strict": true,
 		"allowUnusedLabels": false,
 		"allowUnreachableCode": false,
@@ -19,14 +17,10 @@
 		"noImplicitReturns": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
-
-		// disabled
-		"noUncheckedIndexedAccess": false, // *too* strict since it complains about every [0]
-		"noPropertyAccessFromIndexSignature": false, // not useful https://stackoverflow.com/a/70748402/22114136
-
-		// helpers
+		"noUncheckedIndexedAccess": false,
+		"noPropertyAccessFromIndexSignature": false,
 		"isolatedModules": true,
-		"esModuleInterop": false, // setting to true causes issues with Obsidian's imported `moment`
+		"esModuleInterop": false,
 		"importHelpers": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true
