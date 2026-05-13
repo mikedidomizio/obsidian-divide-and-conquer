@@ -283,7 +283,7 @@ export default class divideAndConquer extends Plugin {
 
 		this.addCommands();
 		this.app.workspace.onLayoutReady(() => {
-			const appContainer = document.getElementsByClassName("app-container").item(0) as HTMLDivElement;
+			const appContainer = activeDocument.getElementsByClassName("app-container").item(0) as HTMLDivElement;
 			this.enabledColor ??= tinycolor(simpleCalc(appContainer.getCssPropertyValue("--checkbox-color"))).spin(180).toHexString();
 			this.disabledColor ??= tinycolor(this.enabledColor).darken(35).toHexString();
 		});
@@ -306,7 +306,7 @@ export default class divideAndConquer extends Plugin {
 
 		if (!this.mode2Controls.has(this.mode)) {
 			const buttons = UIButtons.map((button) => {
-				const el = document.createElement("button");
+				const el = activeDocument.createElement("button");
 				el.type = "button";
 				el.classList.add("mod-cta");
 				el.style.marginLeft = "8px";
@@ -636,7 +636,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private createStatusText() {
-		const span = document.createElement("span");
+		const span = activeDocument.createElement("span");
 		span.style.whiteSpace = "pre-line";
 		span.style.marginLeft = "12px";
 		return span;

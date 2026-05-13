@@ -173,15 +173,15 @@ export class DACSettingsTab extends PluginSettingTab {
 	}
 
 	addTextArea({
-						mode,
-						container,
-						placeholder,
-						value,
-						disabledArea
-					}: TextAreaArgs) {
+		            mode,
+		            container,
+		            placeholder,
+		            value,
+		            disabledArea
+	            }: TextAreaArgs) {
 		let ret!: TextAreaComponent;
-		const reset = (area: TextAreaComponent, mode: Mode) => {
-			this.plugin.saveData();
+		const reset = async (area: TextAreaComponent, mode: Mode) => {
+			await this.plugin.saveData();
 			area.setPlaceholder(
 				[...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
 			).setDisabled(true);
@@ -219,8 +219,6 @@ export class DACSettingsTab extends PluginSettingTab {
 				this.plugin.settings.snippetFilterRegexes = f;
 				break;
 		}
-		this.plugin.saveData();
+		return this.plugin.saveData();
 	}
-
-
 }

@@ -13,7 +13,7 @@ export function simpleCalc(str: string) {
 }
 
 export function removeSetupDebugNotice() {
-	const notices = document.querySelectorAll('.notice') as NodeListOf<HTMLElement>;
+	const notices = activeDocument.querySelectorAll('.notice') as NodeListOf<HTMLElement>;
 	for (let i = 0; i < notices.length; i++) {
 		const notice = notices[i];
 		if (notice?.innerText.includes('plugin setup')) {
