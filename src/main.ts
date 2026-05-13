@@ -15,9 +15,7 @@ import {
 	simpleCalc
 } from "./util";
 import {around} from "monkey-around";
-
-// eslint-disable-next-line
-const tinycolor = require("tinycolor2");
+import tinycolor from "tinycolor2";
 
 const CSS_DELAY = 200;
 
@@ -698,20 +696,21 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private overrideDisplay(mode: Mode, tab: SettingsTab, old: (...args: unknown[]) => void) {
-		// eslint-disable-next-line
-		const plugin = this;
-		return (function display(...args: unknown[]) {
-			plugin.setMode(mode);
-			plugin.refreshTab = () => {
-				plugin.setMode(mode);
-				tab.reload().then(() => {
-					old.apply(tab, args);
-					plugin.addControls();
-					plugin.colorizeIgnoredToggles();
-				});
+		return (...args: unknown[]) => {
+			const refresh = async () => {
+				this.setMode(mode);
+				await tab.reload();
+				old.apply(tab, args);
+				this.addControls();
+				this.colorizeIgnoredToggles();
 			};
-			plugin.refreshTab?.();
-		}).bind(plugin, tab);
+
+			this.refreshTab = () => {
+				void refresh();
+			};
+
+			void refresh();
+		};
 	}
 
 	private colorizeIgnoredToggles() {
