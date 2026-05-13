@@ -172,7 +172,7 @@ export default class divideAndConquer extends Plugin {
 				return;
 			}
 			await this.saveData();
-			setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
+			window.setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
 		};
 
 		const maybeInit = async () => {
@@ -255,7 +255,7 @@ export default class divideAndConquer extends Plugin {
 				case "snippets":
 					return new Promise((resolve) => {
 						this.app.customCss.setCssEnabledStatus(id, true);
-						setTimeout(() => resolve({}), CSS_DELAY);
+						window.setTimeout(() => resolve({}), CSS_DELAY);
 					});
 			}
 		};
@@ -267,7 +267,7 @@ export default class divideAndConquer extends Plugin {
 				case "snippets":
 					return new Promise((resolve) => {
 						this.app.customCss.setCssEnabledStatus(id, false);
-						setTimeout(() => resolve({}), CSS_DELAY);
+						window.setTimeout(() => resolve({}), CSS_DELAY);
 					});
 			}
 		};
