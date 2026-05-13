@@ -23,9 +23,12 @@ export default tseslint.config(
 			}
 		},
 		rules: {
+			"array-bracket-spacing": "error",
+			"computed-property-spacing": "error",
 			"curly": "error",
 			"no-console": "off",
 			"no-magic-numbers": "warn",
+			"object-curly-spacing": "error",
 		}
 	}
 );

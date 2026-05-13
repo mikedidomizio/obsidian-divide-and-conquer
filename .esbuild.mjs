@@ -14,7 +14,7 @@ const isWatchMode = process.argv[2] === "watch";
 
 const config = {
 	entryPoints: ["src/main.ts"],
-	banner: { js: banner + "\n" },
+	banner: {js: banner + "\n"},
 	outfile: "dist/main.js",
 	bundle: true,
 	// biome-ignore format: no need to inspect this regularly
@@ -33,7 +33,7 @@ const config = {
 
 // DOCS https://esbuild.github.io/api/index#metafile
 if (config.metafile) {
-	const sizes = await esbuild.analyzeMetafile(config.metafile, { verbose: false });
+	const sizes = await esbuild.analyzeMetafile(config.metafile, {verbose: false});
 	console.info(sizes);
 }
 

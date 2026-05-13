@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-const { execFileSync } = require("node:child_process");
+const {execFileSync} = require("node:child_process");
 
-function git(args, { allowFailure = false } = {}) {
+function git(args, {allowFailure = false} = {}) {
 	try {
-		return execFileSync("git", args, { encoding: "utf8" }).trim();
+		return execFileSync("git", args, {encoding: "utf8"}).trim();
 	} catch (error) {
 		if (allowFailure) {
 			return "";
@@ -57,37 +57,37 @@ function parseRepoSlug(remoteUrl) {
 function classifyCommit(subject) {
 	const conventional = subject.match(/^([a-z]+)(\(.+\))?!?:\s+(.*)$/iu);
 	if (!conventional) {
-		return { section: "Other", text: subject };
+		return {section: "Other", text: subject};
 	}
 
 	const [, rawType, , description] = conventional;
 	const type = rawType.toLowerCase();
 
 	if (type === "feat") {
-		return { section: "Features", text: description };
+		return {section: "Features", text: description};
 	}
 
 	if (type === "fix") {
-		return { section: "Fixes", text: description };
+		return {section: "Fixes", text: description};
 	}
 
 	if (type === "docs") {
-		return { section: "Docs", text: description };
+		return {section: "Docs", text: description};
 	}
 
 	if (type === "refactor" || type === "perf") {
-		return { section: "Refactors", text: description };
+		return {section: "Refactors", text: description};
 	}
 
 	if (type === "test") {
-		return { section: "Tests", text: description };
+		return {section: "Tests", text: description};
 	}
 
 	if (type === "chore" || type === "build" || type === "ci") {
-		return { section: "Maintenance", text: description };
+		return {section: "Maintenance", text: description};
 	}
 
-	return { section: "Other", text: description };
+	return {section: "Other", text: description};
 }
 
 function extractGitHubUser(author, email) {
@@ -140,7 +140,7 @@ async function fetchGitHubUserForCommit(slug, sha, fallbackUser) {
 
 async function fetchPullRequestForCommit(slug, sha) {
 	if (!slug) {
-		return { prNumber: undefined, prUrl: undefined };
+		return {prNumber: undefined, prUrl: undefined};
 	}
 
 	try {
@@ -149,25 +149,28 @@ async function fetchPullRequestForCommit(slug, sha) {
 		});
 
 		if (!response.ok) {
-			return { prNumber: undefined, prUrl: undefined };
+			return {prNumber: undefined, prUrl: undefined};
 		}
 
 		const pulls = await response.json();
 		const pr = Array.isArray(pulls) ? pulls[0] : undefined;
 		if (!pr) {
-			return { prNumber: undefined, prUrl: undefined };
+			return {prNumber: undefined, prUrl: undefined};
 		}
 
-		return { prNumber: pr.number, prUrl: pr.html_url };
+		return {prNumber: pr.number, prUrl: pr.html_url};
 	} catch {
-		return { prNumber: undefined, prUrl: undefined };
+		return {prNumber: undefined, prUrl: undefined};
 	}
 }
 
 async function attachGitHubUsers(commits, slug) {
 	for (const commit of commits) {
 		commit.githubUser = await fetchGitHubUserForCommit(slug, commit.sha, commit.githubUser);
-		const { prNumber, prUrl } = await fetchPullRequestForCommit(slug, commit.sha);
+		const {
+			prNumber,
+			prUrl
+		} = await fetchPullRequestForCommit(slug, commit.sha);
 		commit.prNumber = prNumber;
 		commit.prUrl = prUrl;
 	}
@@ -187,7 +190,7 @@ function buildReleaseNotes(commits, title, compareUrl) {
 	const order = ["Features", "Fixes", "Refactors", "Docs", "Tests", "Maintenance", "Other"];
 
 	for (const commit of commits) {
-		const { section, text } = classifyCommit(commit.subject);
+		const {section, text} = classifyCommit(commit.subject);
 		const existing = sections.get(section) || [];
 		const commitRef = commit.commitUrl
 			? `[${commit.shortSha}](${commit.commitUrl})`
@@ -263,10 +266,16 @@ async function main() {
 		.filter(Boolean)
 		.map((line) => {
 			const [sha, shortSha, subject, author, email] = line.split("\t");
-			return { sha, shortSha, subject, author, githubUser: extractGitHubUser(author, email) };
+			return {
+				sha,
+				shortSha,
+				subject,
+				author,
+				githubUser: extractGitHubUser(author, email)
+			};
 		});
 
-	const remoteUrl = git(["config", "--get", "remote.origin.url"], { allowFailure: true });
+	const remoteUrl = git(["config", "--get", "remote.origin.url"], {allowFailure: true});
 	const slug = parseRepoSlug(remoteUrl);
 	for (const commit of commits) {
 		commit.commitUrl = slug ? `https://github.com/${slug}/commit/${commit.sha}` : undefined;
