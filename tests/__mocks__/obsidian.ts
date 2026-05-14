@@ -54,24 +54,39 @@ export class PluginSettingTab {
 }
 
 export class Setting {
+	settingEl: HTMLElement;
 	containerEl: HTMLElement;
 	infoEl: HTMLElement;
 	controlEl: HTMLElement;
 	nameEl: HTMLElement;
 	descEl: HTMLElement;
 
-	constructor(_containerEl: HTMLElement) {
-		this.containerEl = document.createElement("div");
+	constructor(containerEl: HTMLElement) {
+		this.containerEl = containerEl;
+		this.settingEl = document.createElement("div");
+		this.settingEl.className = "setting-item";
 		this.infoEl = document.createElement("div");
+		this.infoEl.className = "setting-item-info";
 		this.controlEl = document.createElement("div");
+		this.controlEl.className = "setting-item-control";
 		this.nameEl = document.createElement("div");
+		this.nameEl.className = "setting-item-name";
 		this.descEl = document.createElement("div");
+		this.descEl.className = "setting-item-description";
+
+		this.infoEl.appendChild(this.nameEl);
+		this.infoEl.appendChild(this.descEl);
+		this.settingEl.appendChild(this.infoEl);
+		this.settingEl.appendChild(this.controlEl);
+		this.containerEl.appendChild(this.settingEl);
 	}
 
-	setName(_name: string) {
+	setName(name: string) {
+		this.nameEl.textContent = name;
 		return this;
 	}
-	setDesc(_desc: string) {
+	setDesc(desc: string) {
+		this.descEl.textContent = desc;
 		return this;
 	}
 	addToggle(_cb: (toggle: any) => any) {

@@ -92,3 +92,15 @@ body .internal-embed .markdown-embed-content {
 	width: 100%;
 	min-height: 10rem;
 }
+
+.dac-warning-setting {
+	border: 3px solid var(--text-warning);
+	padding: 10px;
+	margin-bottom: 12px;
+}
+
+.dac-warning-setting .setting-item-name {
+	color: var(--text-warning);
+	font-weight: 600;
+}
+

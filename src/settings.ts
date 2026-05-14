@@ -66,14 +66,16 @@ export class DACSettingsTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Called when the Settings for DAC is opened
+	 */
 	public display(): void {
 		const {containerEl} = this;
 		containerEl.empty();
-		containerEl.createEl('h1', {text: 'Divide and Conquer'});
-		containerEl.createEl('h5', {
-			text: 'Note: Reinitializing or Reloading may cause disabled plugins to dissappear; close and open the menu to see them again'
-			// set the color to the computed value of --interactive-accent
-		}).style.color = getComputedStyle(containerEl).getPropertyValue('--interactive-accent');
+		const warning = new Setting(containerEl)
+			.setName('Warning')
+			.setDesc('Reinitializing or Reloading may cause disabled plugins to disappear; close and open the menu to see them again.')
+		warning.settingEl.classList.add('dac-warning-setting', 'mod-warning');
 
 		new Setting(containerEl)
 			.setName('Reinitialize Obsidian after plugin changes')
