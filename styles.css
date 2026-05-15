@@ -120,3 +120,6 @@ Divide & Conquer Settings Page
 	width: 100%;
 }
 
+.dac-exclusions .setting-item-control textarea {
+	width: 100%;
+}

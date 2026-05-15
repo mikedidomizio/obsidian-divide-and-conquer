@@ -91,6 +91,9 @@ export class Setting {
 		this.descEl.textContent = desc;
 		return this;
 	}
+	setClass(_classString: string) {
+		return this;
+	}
 	addToggle(_cb: (toggle: any) => any) {
 		_cb({ setValue: () => ({ onChange: () => {} }), toggleEl: document.createElement("div") });
 		return this;
