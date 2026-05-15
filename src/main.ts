@@ -227,7 +227,7 @@ export default class divideAndConquer extends Plugin {
 				case "snippets":
 					return getSnippetItems(this.tab as SettingsTab);
 				default:
-					throw new Error("Unknown mode: " + this.mode);
+					throw new Error(`Unknown mode: ${this.mode}`);
 			}
 		};
 
