@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-divide-and-conquer",
-	"version": "2.0.2",
+	"version": "2.0.3",
 	"description": "An Obsidian plugin that provides commands for bulk enabling/disabling of plugins. Intended for power users with many plugins.",
 	"main": "dist/main.js",
 	"scripts": {

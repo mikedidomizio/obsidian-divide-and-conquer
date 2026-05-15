@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.3] - 2026-05-15
+- Add Obsidian plugin ESLint plugin to have better Obsidian checks.
+- Fix remaining issues.
+- Add separate PUBLISHING.md with publishing instructions and release notes
+generation script.
+
 ## [2.0.2] - 2026-05-15
 
 - Improved the settings UI to better match native Obsidian components and styling.
