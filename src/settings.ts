@@ -191,7 +191,6 @@ export class DACSettingsTab extends PluginSettingTab {
 		container.addTextArea((textArea) => {
 			ret = textArea;
 			textArea.inputEl.setAttr('rows', 10);
-			textArea.inputEl.style.width = '100%';
 			if (value) {
 				textArea.setPlaceholder(placeholder ?? "").setValue(value);
 			}
