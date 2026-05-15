@@ -185,7 +185,10 @@ export class DACSettingsTab extends PluginSettingTab {
 			await this.plugin.saveData();
 			area.setPlaceholder(
 				[...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
-			).setDisabled(true);
+			)
+			// although it is possible we could use .setDisabled(), it would be a major breaking change.
+			// consider updating the minAppVersion to 1.2.3 and using area.setDisabled() in the next breaking change
+			area.inputEl.setAttr('disabled', true);
 		};
 
 		container.addTextArea((textArea) => {
@@ -196,7 +199,12 @@ export class DACSettingsTab extends PluginSettingTab {
 			}
 			textArea.setPlaceholder(
 				placeholder ?? [...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
-			).setDisabled(!disabledArea);
+			)
+			// although it is possible we could use .setDisabled(), it would be a major breaking change
+			// consider updating the minAppVersion to 1.2.3 and using area.setDisabled() in the next breaking change
+			if (!disabledArea) {
+				textArea.inputEl.setAttr('disabled', true);
+			}
 
 			if (disabledArea) {
 				this.toggles.forEach(t => t.toggleEl.onClickEvent(reset.bind(this, disabledArea, mode)));
