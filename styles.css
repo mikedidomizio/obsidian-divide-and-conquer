@@ -93,14 +93,30 @@ body .internal-embed .markdown-embed-content {
 	min-height: 10rem;
 }
 
+/**
+Divide & Conquer Settings Page
+**/
+
+/* Warning wrapper */
 .dac-warning-setting {
 	border: 3px solid var(--text-warning);
 	padding: 10px;
 	margin-bottom: 12px;
 }
 
+/* Warning top text */
 .dac-warning-setting .setting-item-name {
 	color: var(--text-warning);
 	font-weight: 600;
+}
+
+/* Exclusions: left side*/
+.dac-exclusions .setting-item-info {
+	width: 45%;
+}
+
+/* Exclusions: right side*/
+.dac-exclusions .setting-item-control {
+	width: 100%;
 }
 

@@ -144,7 +144,8 @@ export class DACSettingsTab extends PluginSettingTab {
 
 		const pluginExclusions = new Setting(containerEl)
 			.setName('Plugin Exclusions')
-			.setDesc('Exclude plugins using regex (case insensitive).\nEach new line is a new regex. Plugin ids are used for matching by default. Included plugins are on the left, excluded on the right. ');
+			.setDesc('Exclude plugins using regex (case insensitive).\nEach new line is a new regex. Plugin ids are used for matching by default. Included plugins are on the left, excluded on the right. ')
+			.setClass('dac-exclusions');
 		this.addTextArea({
 			mode: 'plugins',
 			container: pluginExclusions,
@@ -158,7 +159,8 @@ export class DACSettingsTab extends PluginSettingTab {
 
 		const snippetExclusions = new Setting(containerEl)
 			.setName('Snippet Exclusions')
-			.setDesc('Exclude snippets using regex (case insensitive).\nEach new line is a new regex. Snippet are only exclude by their name.');
+			.setDesc('Exclude snippets using regex (case insensitive).\nEach new line is a new regex. Snippet are only exclude by their name.')
+			.setClass('dac-exclusions');
 		this.addTextArea({
 			mode: 'snippets',
 			container: snippetExclusions,
@@ -168,11 +170,6 @@ export class DACSettingsTab extends PluginSettingTab {
 				mode: 'snippets',
 				container: snippetExclusions
 			})
-		});
-
-		[pluginExclusions, snippetExclusions].forEach(s => {
-			s.controlEl.style.width = '100%';
-			s.infoEl.style.width = '45%';
 		});
 	}
 
