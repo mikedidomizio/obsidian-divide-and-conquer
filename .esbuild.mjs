@@ -1,5 +1,5 @@
 import {appendFileSync, copyFileSync} from "node:fs";
-import builtins from "builtin-modules";
+import { builtinModules } from "node:module";
 import esbuild from "esbuild";
 import chokidar from 'chokidar';
 
@@ -18,7 +18,7 @@ const config = {
 	outfile: "dist/main.js",
 	bundle: true,
 	// biome-ignore format: no need to inspect this regularly
-	external: ["obsidian", "electron", "@codemirror/autocomplete", "@codemirror/collab", "@codemirror/commands", "@codemirror/language", "@codemirror/lint", "@codemirror/search", "@codemirror/state", "@codemirror/view", "@lezer/common", "@lezer/highlight", "@lezer/lr", ...builtins],
+	external: ["obsidian", "electron", "@codemirror/autocomplete", "@codemirror/collab", "@codemirror/commands", "@codemirror/language", "@codemirror/lint", "@codemirror/search", "@codemirror/state", "@codemirror/view", "@lezer/common", "@lezer/highlight", "@lezer/lr", ...builtinModules],
 	format: "cjs",
 	target: "es2022",
 	sourcemap: isProductionMode || isAnalyzeMode ? false : "inline",
