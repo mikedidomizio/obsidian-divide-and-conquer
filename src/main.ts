@@ -187,8 +187,14 @@ export default class divideAndConquer extends Plugin {
 			() => this.setMode(mode),
 			f,
 			() => this.mode2Refresh.get(this.mode)?.(),
-			maybeReload,
-			maybeInit,
+			() => {
+				// intended as the compose function is expecting functions that return void, and not Promise<void>
+				(() => maybeReload())()
+			},
+			() => {
+				// intended as the compose function is expecting functions that return void, and not Promise<void>
+				(() => maybeInit())()
+			},
 			notice,
 		).bind(this)()]));
 
