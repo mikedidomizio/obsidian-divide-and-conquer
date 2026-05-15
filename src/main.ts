@@ -192,6 +192,7 @@ export default class divideAndConquer extends Plugin {
 				(() => maybeReload())()
 			},
 			() => {
+				// todo if the previous step reloads, we don't need to continue here
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
 				(() => maybeInit())()
 			},
