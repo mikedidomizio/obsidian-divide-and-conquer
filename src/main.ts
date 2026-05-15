@@ -315,7 +315,6 @@ export default class divideAndConquer extends Plugin {
 				const el = activeDocument.createElement("button");
 				el.type = "button";
 				el.classList.add("mod-cta");
-				el.style.marginLeft = "8px";
 				el.ariaLabel = button.tooltip;
 				el.setText(this.getButtonLabel(button.id));
 				el.onclick = () => this.wrapCall(this.mode, button.id)?.();
@@ -643,8 +642,7 @@ export default class divideAndConquer extends Plugin {
 
 	private createStatusText() {
 		const span = activeDocument.createElement("span");
-		span.style.whiteSpace = "pre-line";
-		span.style.marginLeft = "12px";
+		span.className = "setting-item-name"
 		return span;
 	}
 

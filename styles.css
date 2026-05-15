@@ -123,3 +123,12 @@ Divide & Conquer Settings Page
 .dac-exclusions .setting-item-control textarea {
 	width: 100%;
 }
+
+/**
+Obsidian Community Plugins Page
+**/
+
+/* The action buttons that are inserted */
+.installed-plugins-container .setting-item-heading .setting-item-control button {
+	margin-left: 8px;
+}
