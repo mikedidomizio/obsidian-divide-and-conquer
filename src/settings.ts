@@ -208,9 +208,9 @@ export class DACSettingsTab extends PluginSettingTab {
 
 			if (disabledArea) {
 				this.toggles.forEach(t => t.toggleEl.onClickEvent(reset.bind(this, disabledArea, mode)));
-				textArea.inputEl.onblur = (e: FocusEvent) => {
-					this.setFilters(mode, (e.target as HTMLInputElement).value);
-					reset(disabledArea, mode);
+				textArea.inputEl.onblur = async (e: FocusEvent) => {
+					await this.setFilters(mode, (e.target as HTMLInputElement).value);
+					await reset(disabledArea, mode);
 				};
 			}
 		});
