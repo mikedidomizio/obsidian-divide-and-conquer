@@ -95,10 +95,12 @@ export class DACSettingsTab extends PluginSettingTab {
 					await this.plugin.saveData();
 				})
 			);
-		containerEl.createEl('hr').createEl('br');
 
+		containerEl.createEl('hr');
 
-		containerEl.createEl('h3', {text: 'Changes below affect filtering and bisect candidate selection.'});
+		new Setting(containerEl)
+			.setName('Changes below affect filtering and bisect candidate selection.')
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName('Use Filters on Plugin Display Names')
