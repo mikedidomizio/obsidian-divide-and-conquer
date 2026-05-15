@@ -299,7 +299,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public override async loadData() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await super.loadData());
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, super.loadData());
 		this.settings.bisectSessions ??= {};
 	}
 
