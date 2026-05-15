@@ -146,8 +146,10 @@ export default class divideAndConquer extends Plugin {
 		this.mode2Refresh.set(this.mode, f);
 	}
 
-	override async onunload() {
-		void this.saveData();
+	override onunload(): void {
+		this.saveData().catch(() => {
+			throw new Error('Could not save data')
+		})
 	}
 
 	override async onload() {
@@ -189,12 +191,12 @@ export default class divideAndConquer extends Plugin {
 			() => this.mode2Refresh.get(this.mode)?.(),
 			() => {
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => maybeReload())()
+				(() => void maybeReload())()
 			},
 			() => {
 				// todo if the previous step reloads, we don't need to continue here
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => maybeInit())()
+				(() => void maybeInit())()
 			},
 			notice,
 		).bind(this)()]));
@@ -228,7 +230,7 @@ export default class divideAndConquer extends Plugin {
 				case "snippets":
 					return getSnippetItems(this.tab as SettingsTab);
 				default:
-					throw new Error(`Unknown mode: ${this.mode}`);
+					throw new Error(`Unknown mode`);
 			}
 		};
 
