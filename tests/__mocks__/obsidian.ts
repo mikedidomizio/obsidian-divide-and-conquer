@@ -80,7 +80,9 @@ export class Setting {
 		this.settingEl.appendChild(this.controlEl);
 		this.containerEl.appendChild(this.settingEl);
 	}
-
+	setHeading() {
+		return this;
+	}
 	setName(name: string) {
 		this.nameEl.textContent = name;
 		return this;
