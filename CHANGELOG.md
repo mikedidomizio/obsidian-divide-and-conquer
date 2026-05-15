@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.2] - 2026-05-15
+
+- Improved the settings UI to better match native Obsidian components and styling.
+- Cleaned up warning and heading presentation for a clearer settings experience.
+- Simplified the build setup by removing an unnecessary package dependency.
+- Cleaned up project configuration and internal code for easier maintenance.
+- Added test coverage for reload, reinitialize, and updated settings behaviour.
+
 ## [2.0.1] - 2026-05-12
 - Addressed concerns raised from new Obsidian plugins site.
 
