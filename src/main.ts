@@ -147,7 +147,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	override async onunload() {
-		await this.saveData();
+		void this.saveData();
 	}
 
 	override async onload() {
