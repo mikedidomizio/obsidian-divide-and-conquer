@@ -1,4 +1,4 @@
-# ⚔️ Divide & Conquer
+# Divide and Conquer
 
 ![Total Downloads](https://img.shields.io/github/downloads/mikedidomizio/obsidian-divide-and-conquer/total?label=Total%20Downloads&style=plastic)
 ![Latest Release](https://img.shields.io/github/v/release/mikedidomizio/obsidian-divide-and-conquer?label=Latest%20Release&style=plastic)
