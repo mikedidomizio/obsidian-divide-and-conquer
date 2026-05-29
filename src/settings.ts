@@ -224,7 +224,7 @@ export class DACSettingsTab extends PluginSettingTab {
 					await reset(disabledArea, mode);
 				};
 
-				disabledArea.inputEl.addEventListener('click', async () => {
+				disabledArea.inputEl.addEventListener('click', () => {
 					const selected = getLineAtCursor(disabledArea.inputEl);
 					if (!selected) {
 						return;
@@ -240,8 +240,8 @@ export class DACSettingsTab extends PluginSettingTab {
 
 					const next = [...existing, selected].join('\n');
 					textArea.setValue(next);
-					await this.setFilters(mode, next);
-					await reset(disabledArea, mode);
+					void this.setFilters(mode, next);
+					void reset(disabledArea, mode);
 				});
 			}
 		});
