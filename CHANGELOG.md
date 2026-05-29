@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.0] - 2026-05-29
+- Add "click to exclude" functionality to plugins/snippets list in settings.
+
+## [2.0.4] - 2026-05-27
+- Rename plugin from "Divide & Conquer" to "Divide and Conquer" to comply with Obsidian's plugin naming guidelines.
+
 ## [2.0.3] - 2026-05-15
 - Add Obsidian plugin ESLint plugin to have better Obsidian checks.
 - Fix remaining issues.
