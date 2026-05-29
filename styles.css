@@ -124,6 +124,11 @@ Divide & Conquer Settings Page
 	width: 100%;
 }
 
+/* Exclusions: readonly included-items textareas show pointer cursor for click-to-exclude UX */
+.dac-exclusions .setting-item-control textarea:nth-child(1) {
+	cursor: pointer;
+}
+
 /**
 Obsidian Community Plugins Page
 **/

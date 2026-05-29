@@ -183,12 +183,23 @@ export class DACSettingsTab extends PluginSettingTab {
 		let ret!: TextAreaComponent;
 		const reset = async (area: TextAreaComponent, mode: Mode) => {
 			await this.plugin.saveData();
-			area.setPlaceholder(
+			area.setValue(
 				[...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
 			)
-			// although it is possible we could use .setDisabled(), it would be a major breaking change.
-			// consider updating the minAppVersion to 1.2.3 and using area.setDisabled() in the next breaking change
-			area.inputEl.setAttr('disabled', true);
+			// Keep this textarea interactive for click-to-exclude while preventing direct edits.
+			area.inputEl.setAttr('readonly', true);
+		};
+
+		const getLineAtCursor = (inputEl: HTMLTextAreaElement) => {
+			const valueAtCursor = inputEl.value;
+			if (!valueAtCursor) {
+				return null;
+			}
+			const cursor = inputEl.selectionStart ?? 0;
+			const start = valueAtCursor.lastIndexOf('\n', Math.max(0, cursor - 1)) + 1;
+			const end = valueAtCursor.indexOf('\n', cursor);
+			const lineEnd = end === -1 ? valueAtCursor.length : end;
+			return valueAtCursor.slice(start, lineEnd).trim();
 		};
 
 		container.addTextArea((textArea) => {
@@ -197,13 +208,13 @@ export class DACSettingsTab extends PluginSettingTab {
 			if (value) {
 				textArea.setPlaceholder(placeholder ?? "").setValue(value);
 			}
-			textArea.setPlaceholder(
-				placeholder ?? [...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
-			)
-			// although it is possible we could use .setDisabled(), it would be a major breaking change
-			// consider updating the minAppVersion to 1.2.3 and using area.setDisabled() in the next breaking change
+			const includedItemsText = [...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n');
+			textArea.setPlaceholder(placeholder ?? includedItemsText)
+
 			if (!disabledArea) {
-				textArea.inputEl.setAttr('disabled', true);
+				textArea.setValue(includedItemsText);
+				// Keep included list interactive for click-to-exclude while preventing direct edits.
+				textArea.inputEl.setAttr('readonly', true);
 			}
 
 			if (disabledArea) {
@@ -212,6 +223,26 @@ export class DACSettingsTab extends PluginSettingTab {
 					await this.setFilters(mode, (e.target as HTMLInputElement).value);
 					await reset(disabledArea, mode);
 				};
+
+				disabledArea.inputEl.addEventListener('click', async () => {
+					const selected = getLineAtCursor(disabledArea.inputEl);
+					if (!selected) {
+						return;
+					}
+
+					const existing = textArea.inputEl.value
+						.split('\n')
+						.map(line => line.trim())
+						.filter(Boolean);
+					if (existing.includes(selected)) {
+						return;
+					}
+
+					const next = [...existing, selected].join('\n');
+					textArea.setValue(next);
+					await this.setFilters(mode, next);
+					await reset(disabledArea, mode);
+				});
 			}
 		});
 		return ret;

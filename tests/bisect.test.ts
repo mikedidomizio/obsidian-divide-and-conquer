@@ -198,6 +198,26 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(enabled.has("c")).toBe(true);
 	});
 
+	it("Excluded plugins are never bisect candidates or culprits", async () => {
+		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"], ["^a$"]);
+
+		await plugin.startBisect();
+		const started = plugin.mode2Session.get("plugins")!;
+		expect(started.candidates.has("a")).toBe(false);
+		expect(started.enabledUnderTest.has("a")).toBe(false);
+
+		// Drive to a single culprit and ensure the excluded plugin is never selected.
+		await plugin.answerYes();
+		await plugin.answerNo();
+
+		const finished = plugin.mode2Session.get("plugins")!;
+		expect(finished.culpritId).toBeDefined();
+		expect(finished.culpritId).not.toBe("a");
+
+		const enabled = plugin.getEnabledFromObsidian();
+		expect(enabled.has("a")).toBe(true);
+	});
+
 	it("Enable All clears an in-progress plugin bisect session", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
