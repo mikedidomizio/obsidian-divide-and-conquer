@@ -154,9 +154,12 @@ const snippetCommands: DACCommand[] = [
 
 const UIButtons: DACButton[] = [
 	{id: "enableAllExceptExcluded", tooltip: "Enable All (except excluded)"},
+	{id: "enableAll", tooltip: "Enable All"},
 	{id: "disableAllExceptExcluded", tooltip: "Disable All (except excluded)"},
-	{id: "startBisect", tooltip: "Start (Disable)"},
-	{id: "startBisectReverse", tooltip: "Start (Enable)"},
+	{id: "disableAll", tooltip: "Disable All"},
+	{id: "startBisect", tooltip: "Start bisect (disable half)"},
+	{id: "startBisectReverse", tooltip: "Start bisect (enable half)"},
+	{id: "resetBisect", tooltip: "Reset bisect and restore previous states"},
 	{id: "answerYes", tooltip: "Issue still happens"},
 	{id: "answerNo", tooltip: "Issue does not happen"},
 ];
@@ -788,17 +791,21 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private getButtonLabel(id: keyof divideAndConquer) {
-		const bypass = this.getBypassState(this.mode);
 		switch (id) {
 			case "enableAllExceptExcluded":
-				if (this.getSession().isRunning) return "Reset";
-				return bypass.enable ? "Enable All" : "Enable All (except excluded)";
+				return "Enable All (except excluded)";
+			case "enableAll":
+				return "Enable All";
 			case "disableAllExceptExcluded":
-				return bypass.disable ? "Disable All" : "Disable All (except excluded)";
+				return "Disable All (except excluded)";
+			case "disableAll":
+				return "Disable All";
 			case "startBisect":
 				return "Start (Disable)";
 			case "startBisectReverse":
 				return "Start (Enable)";
+			case "resetBisect":
+				return "Reset";
 			case "answerYes":
 				return "Yes";
 			case "answerNo":
@@ -810,37 +817,32 @@ export default class divideAndConquer extends Plugin {
 
 	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
 		if (id === "enableAllExceptExcluded") {
-			if (this.getSession().isRunning) {
-				return "resetBisect";
-			}
 			const bypass = this.getBypassState(this.mode);
-			// Clicking any enable state resets disable state back to "(except excluded)".
-			bypass.disable = false;
-			const buttonText = this.controls[0]?.textContent?.trim();
-			const isPlainEnable = buttonText ? buttonText === "Enable All" : bypass.enable;
-			if (bypass.enable && isPlainEnable) {
-				bypass.enable = false;
-				this.updateControlState();
-				return "enableAll";
-			}
-			bypass.enable = true;
+			bypass.disable = false; // Reset opposite state
+			bypass.enable = true;   // Mark that we went to full-scope
 			this.updateControlState();
 			return "enableAllExceptExcluded";
 		}
+		if (id === "enableAll") {
+			const bypass = this.getBypassState(this.mode);
+			bypass.disable = false; // Reset opposite state
+			// bypass.enable stays true (we're on the full-scope version)
+			this.updateControlState();
+			return "enableAll";
+		}
 		if (id === "disableAllExceptExcluded") {
 			const bypass = this.getBypassState(this.mode);
-			// Clicking any disable state resets enable state back to "(except excluded)".
-			bypass.enable = false;
-			const buttonText = this.controls[1]?.textContent?.trim();
-			const isPlainDisable = buttonText ? buttonText === "Disable All" : bypass.disable;
-			if (bypass.disable && isPlainDisable) {
-				bypass.disable = false;
-				this.updateControlState();
-				return "disableAll";
-			}
-			bypass.disable = true;
+			bypass.enable = false; // Reset opposite state
+			bypass.disable = true;   // Mark that we went to full-scope
 			this.updateControlState();
 			return "disableAllExceptExcluded";
+		}
+		if (id === "disableAll") {
+			const bypass = this.getBypassState(this.mode);
+			bypass.enable = false; // Reset opposite state
+			// bypass.disable stays true (we're on the full-scope version)
+			this.updateControlState();
+			return "disableAll";
 		}
 		return id;
 	}
@@ -850,20 +852,32 @@ export default class divideAndConquer extends Plugin {
 		if (controls.length !== numberOfButtonsAndTextElements) {
 			return;
 		}
-		const [enableAllBtn, disableAllBtn, startBtn, startReverseBtn, yes, no, text] = controls;
+		const [enableAllExceptBtn, enableAllBtn, disableAllExceptBtn, disableAllBtn, startBtn, startReverseBtn, resetBtn, yes, no, text] = controls;
 
 		const session = this.getSession();
-		enableAllBtn.setText(this.getButtonLabel("enableAllExceptExcluded"));
-		enableAllBtn.ariaLabel = session.isRunning
-			? "Reset bisect and restore previous states"
-			: "Enable all items";
+		const bypass = this.getBypassState(this.mode);
 
-		disableAllBtn.setText(this.getButtonLabel("disableAllExceptExcluded"));
-		disableAllBtn.ariaLabel = "Disable all items";
-		disableAllBtn.style.display = session.isRunning ? "none" : "";
+		// Show/hide enable button pair based on bypass state
+		enableAllExceptBtn.style.display = bypass.enable ? "none" : "";
+		enableAllBtn.style.display = bypass.enable ? "" : "none";
+		const enableBtnLabel = bypass.enable ? enableAllBtn : enableAllExceptBtn;
+		enableBtnLabel.ariaLabel = "Enable all items";
+
+		// Show/hide disable button pair based on bypass state
+		disableAllExceptBtn.style.display = bypass.disable ? "none" : "";
+		disableAllBtn.style.display = bypass.disable ? "" : "none";
+		const disableBtnLabel = bypass.disable ? disableAllBtn : disableAllExceptBtn;
+		disableBtnLabel.ariaLabel = "Disable all items";
+
+		// Hide all enable and disable buttons during bisect
+		enableAllExceptBtn.style.display = session.isRunning ? "none" : enableAllExceptBtn.style.display;
+		enableAllBtn.style.display = session.isRunning ? "none" : enableAllBtn.style.display;
+		disableAllExceptBtn.style.display = session.isRunning ? "none" : disableAllExceptBtn.style.display;
+		disableAllBtn.style.display = session.isRunning ? "none" : disableAllBtn.style.display;
 
 		startBtn.style.display = session.isRunning ? "none" : "";
 		startReverseBtn.style.display = session.isRunning ? "none" : "";
+		resetBtn.style.display = session.isRunning ? "" : "none";
 		yes.style.display = session.isRunning ? "" : "none";
 		no.style.display = session.isRunning ? "" : "none";
 
