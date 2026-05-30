@@ -19,6 +19,9 @@ import tinycolor from "tinycolor2";
 
 const CSS_DELAY = 200;
 
+/** Plugin IDs that must never be disabled by any bulk-disable or bisect operation. */
+const PROTECTED_IDS = new Set(["obsidian-divide-and-conquer", "hot-reload"]);
+
 interface DACCommand {
 	id: string;
 	method: keyof divideAndConquer;
@@ -39,6 +42,9 @@ interface NameNID {
 
 interface BisectSession {
 	isRunning: boolean;
+	/** Which direction the bisect is running: "disable" narrows enabled plugins
+	 * (disables more), "enable" narrows disabled plugins (enables more). */
+	direction: "disable" | "enable";
 	candidates: Set<string>;
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
@@ -46,16 +52,45 @@ interface BisectSession {
 	awaitingInitialAnswer: boolean;
 }
 
+interface BypassState {
+	enable: boolean;
+	disable: boolean;
+}
+
 const pluginCommands: DACCommand[] = [
 	{
 		id: "plugin-enable-all",
 		method: "enableAll",
-		name: "Plugin Enable All - enable every installed plugin"
+		name: "Plugin Enable All - enable every installed plugin (including excluded)"
+	},
+	{
+		id: "plugin-enable-all-except-excluded",
+		method: "enableAllExceptExcluded",
+		name: "Plugin Enable All Except Excluded - enable every installed plugin " +
+			"respecting the exclusion list"
+	},
+	{
+		id: "plugin-disable-all",
+		method: "disableAll",
+		name: "Plugin Disable All - disable every installed plugin (including excluded)"
+	},
+	{
+		id: "plugin-disable-all-except-excluded",
+		method: "disableAllExceptExcluded",
+		name: "Plugin Disable All Except Excluded - disable every installed plugin " +
+			"respecting the exclusion list"
 	},
 	{
 		id: "plugin-start-bisect",
 		method: "startBisect",
-		name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half"
+		name: "Plugin Bisect Start (Disable) - begin troubleshooting by disabling " +
+			"half your plugins"
+	},
+	{
+		id: "plugin-start-bisect-reverse",
+		method: "startBisectReverse",
+		name: "Plugin Bisect Start (Enable) - begin troubleshooting by enabling " +
+			"half your disabled plugins"
 	},
 	{
 		id: "plugin-answer-yes",
@@ -71,9 +106,39 @@ const pluginCommands: DACCommand[] = [
 
 const snippetCommands: DACCommand[] = [
 	{
+		id: "snippet-enable-all",
+		method: "enableAll",
+		name: "Snippet Enable All - enable every installed CSS snippet (including excluded)"
+	},
+	{
+		id: "snippet-enable-all-except-excluded",
+		method: "enableAllExceptExcluded",
+		name: "Snippet Enable All Except Excluded - enable every CSS snippet respecting " +
+			"the exclusion list"
+	},
+	{
+		id: "snippet-disable-all",
+		method: "disableAll",
+		name: "Snippet Disable All - disable every installed CSS snippet (including " +
+			"excluded)"
+	},
+	{
+		id: "snippet-disable-all-except-excluded",
+		method: "disableAllExceptExcluded",
+		name: "Snippet Disable All Except Excluded - disable every CSS snippet respecting " +
+			"the exclusion list"
+	},
+	{
 		id: "snippet-start-bisect",
 		method: "startBisect",
-		name: "Snippet Bisect Start - begin troubleshooting by splitting CSS snippets in half"
+		name: "Snippet Bisect Start (Disable) - begin troubleshooting by disabling " +
+			"half your CSS snippets"
+	},
+	{
+		id: "snippet-start-bisect-reverse",
+		method: "startBisectReverse",
+		name: "Snippet Bisect Start (Enable) - begin troubleshooting by enabling half " +
+			"your disabled CSS snippets"
 	},
 	{
 		id: "snippet-answer-yes",
@@ -85,22 +150,19 @@ const snippetCommands: DACCommand[] = [
 		method: "answerNo",
 		name: "Snippet Bisect No - issue does not happen with the currently enabled CSS snippets"
 	},
-	{
-		id: "snippet-enable-all",
-		method: "enableAll",
-		name: "Snippet Enable All - enable every installed CSS snippet"
-	},
 ];
 
 const UIButtons: DACButton[] = [
-	{id: "enableAll", tooltip: "Enable all items"},
-	{id: "startBisect", tooltip: "Start bisect"},
+	{id: "enableAllExceptExcluded", tooltip: "Enable All (except excluded)"},
+	{id: "disableAllExceptExcluded", tooltip: "Disable All (except excluded)"},
+	{id: "startBisect", tooltip: "Start (Disable)"},
+	{id: "startBisectReverse", tooltip: "Start (Enable)"},
 	{id: "answerYes", tooltip: "Issue still happens"},
 	{id: "answerNo", tooltip: "Issue does not happen"},
 ];
 
-const numberOfTextElements = 1
-const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements
+const numberOfTextElements = 1;
+const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements;
 
 export default class divideAndConquer extends Plugin {
 	settings!: typeof DEFAULT_SETTINGS;
@@ -129,6 +191,7 @@ export default class divideAndConquer extends Plugin {
 	mode2Tab: Map<Mode, SettingsTab> = new Map();
 	mode2Controls: Map<Mode, HTMLElement[]> = new Map();
 	mode2Session: Map<Mode, BisectSession> = new Map();
+	private mode2Bypass: Map<Mode, BypassState> = new Map();
 
 	get controls() {
 		return this.mode2Controls.get(this.mode) ?? [];
@@ -364,6 +427,27 @@ export default class divideAndConquer extends Plugin {
 		await this.persistSession();
 	}
 
+	public async enableAllExceptExcluded() {
+		const included = this.getIncludedSortedItems();
+		await this.enableItems(included.map(item => item.id));
+		this.clearSession(this.getSession());
+		await this.persistSession();
+	}
+
+	public async disableAll() {
+		const allItems = this.getAllSortedItems();
+		await this.disableItems(allItems.map(item => item.id));
+		this.clearSession(this.getSession());
+		await this.persistSession();
+	}
+
+	public async disableAllExceptExcluded() {
+		const included = this.getIncludedSortedItems();
+		await this.disableItems(included.map(item => item.id));
+		this.clearSession(this.getSession());
+		await this.persistSession();
+	}
+
 	public async resetBisect() {
 		const session = this.getSession();
 		const enabledBeforeBisect = session.enabledBeforeBisect;
@@ -389,6 +473,7 @@ export default class divideAndConquer extends Plugin {
 
 		const session = this.getSession();
 		session.isRunning = true;
+		session.direction = "disable";
 		session.culpritId = undefined;
 		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
 		session.candidates = new Set(candidates.map(item => item.id));
@@ -396,8 +481,32 @@ export default class divideAndConquer extends Plugin {
 			[...session.candidates].filter(id => session.enabledBeforeBisect?.has(id)),
 		);
 		session.awaitingInitialAnswer = true;
+		this.resetBypassFlags(this.mode);
 		// Starting bisect from settings should not immediately reload Obsidian.
 		this.skipNextReload = true;
+		await this.persistSession();
+	}
+
+	public async startBisectReverse() {
+		const includedItems = this.getIncludedSortedItems();
+		const disabledCandidates = includedItems.filter(item => !this.getEnabledFromObsidian().has(item.id));
+
+		if (disabledCandidates.length < 1) {
+			new Notice(`No disabled ${this.getPluralLabel()} available for reverse bisect.`);
+			return;
+		}
+
+		const session = this.getSession();
+		session.isRunning = true;
+		session.direction = "enable";
+		session.culpritId = undefined;
+		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		session.candidates = new Set(disabledCandidates.map(item => item.id));
+		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
+		session.awaitingInitialAnswer = false;
+		this.resetBypassFlags(this.mode);
+		this.skipNextReload = true;
+		await this.applyTestState(session.candidates, session.enabledUnderTest);
 		await this.persistSession();
 	}
 
@@ -510,7 +619,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	async disableItems(items: string[] | Set<string>) {
-		const list = [...items];
+		const list = [...items].filter(id => !PROTECTED_IDS.has(id));
 		for (const id of list) {
 			await this.disableItem(id);
 		}
@@ -525,20 +634,27 @@ export default class divideAndConquer extends Plugin {
 		return this.mode2Session.get(this.mode) as BisectSession;
 	}
 
+	private emptySession(): BisectSession {
+		return {
+			isRunning: false,
+			direction: "disable",
+			candidates: new Set<string>(),
+			enabledUnderTest: new Set<string>(),
+			culpritId: undefined,
+			enabledBeforeBisect: undefined,
+			awaitingInitialAnswer: false,
+		};
+	}
+
 	private deserializeSession(session?: PersistedBisectSession): BisectSession {
-		if (!session) {
-			return {
-				isRunning: false,
-				candidates: new Set<string>(),
-				enabledUnderTest: new Set<string>(),
-				culpritId: undefined,
-				enabledBeforeBisect: undefined,
-				awaitingInitialAnswer: false,
-			};
+		// Legacy sessions without an explicit direction field are discarded rather than guessing intent.
+		if (!session || !session.direction) {
+			return this.emptySession();
 		}
 
 		return {
 			isRunning: session.isRunning,
+			direction: session.direction,
 			candidates: new Set(session.candidates ?? []),
 			enabledUnderTest: new Set(session.enabledUnderTest ?? []),
 			culpritId: session.culpritId,
@@ -550,6 +666,7 @@ export default class divideAndConquer extends Plugin {
 	private serializeSession(session: BisectSession): PersistedBisectSession {
 		return {
 			isRunning: session.isRunning,
+			direction: session.direction,
 			candidates: [...session.candidates],
 			enabledUnderTest: [...session.enabledUnderTest],
 			culpritId: session.culpritId,
@@ -585,11 +702,32 @@ export default class divideAndConquer extends Plugin {
 
 	private clearSession(session: BisectSession) {
 		session.isRunning = false;
+		session.direction = "disable";
 		session.candidates = new Set();
 		session.enabledUnderTest = new Set();
 		session.culpritId = undefined;
 		session.enabledBeforeBisect = undefined;
 		session.awaitingInitialAnswer = false;
+	}
+
+	private getBypassState(mode: Mode): BypassState {
+		if (!this.mode2Bypass.has(mode)) {
+			this.mode2Bypass.set(mode, {enable: false, disable: false});
+		}
+		return this.mode2Bypass.get(mode)!;
+	}
+
+	private resetBypassFlags(mode: Mode) {
+		this.mode2Bypass.set(mode, {enable: false, disable: false});
+	}
+
+	private handleManualItemToggle(mode: Mode) {
+		const bypass = this.getBypassState(mode);
+		if (!bypass.enable && !bypass.disable) {
+			return;
+		}
+		this.resetBypassFlags(mode);
+		this.updateControlState();
 	}
 
 	private consumeReloadSkipToken() {
@@ -650,11 +788,17 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private getButtonLabel(id: keyof divideAndConquer) {
+		const bypass = this.getBypassState(this.mode);
 		switch (id) {
-			case "enableAll":
-				return this.getSession().isRunning ? "Reset" : "Enable All";
+			case "enableAllExceptExcluded":
+				if (this.getSession().isRunning) return "Reset";
+				return bypass.enable ? "Enable All" : "Enable All (except excluded)";
+			case "disableAllExceptExcluded":
+				return bypass.disable ? "Disable All" : "Disable All (except excluded)";
 			case "startBisect":
-				return "Start";
+				return "Start (Disable)";
+			case "startBisectReverse":
+				return "Start (Enable)";
 			case "answerYes":
 				return "Yes";
 			case "answerNo":
@@ -665,8 +809,38 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
-		if (id === "enableAll" && this.getSession().isRunning) {
-			return "resetBisect";
+		if (id === "enableAllExceptExcluded") {
+			if (this.getSession().isRunning) {
+				return "resetBisect";
+			}
+			const bypass = this.getBypassState(this.mode);
+			// Clicking any enable state resets disable state back to "(except excluded)".
+			bypass.disable = false;
+			const buttonText = this.controls[0]?.textContent?.trim();
+			const isPlainEnable = buttonText ? buttonText === "Enable All" : bypass.enable;
+			if (bypass.enable && isPlainEnable) {
+				bypass.enable = false;
+				this.updateControlState();
+				return "enableAll";
+			}
+			bypass.enable = true;
+			this.updateControlState();
+			return "enableAllExceptExcluded";
+		}
+		if (id === "disableAllExceptExcluded") {
+			const bypass = this.getBypassState(this.mode);
+			// Clicking any disable state resets enable state back to "(except excluded)".
+			bypass.enable = false;
+			const buttonText = this.controls[1]?.textContent?.trim();
+			const isPlainDisable = buttonText ? buttonText === "Disable All" : bypass.disable;
+			if (bypass.disable && isPlainDisable) {
+				bypass.disable = false;
+				this.updateControlState();
+				return "disableAll";
+			}
+			bypass.disable = true;
+			this.updateControlState();
+			return "disableAllExceptExcluded";
 		}
 		return id;
 	}
@@ -676,13 +850,20 @@ export default class divideAndConquer extends Plugin {
 		if (controls.length !== numberOfButtonsAndTextElements) {
 			return;
 		}
-		const [primary, start, yes, no, text] = controls;
+		const [enableAllBtn, disableAllBtn, startBtn, startReverseBtn, yes, no, text] = controls;
 
 		const session = this.getSession();
-		primary.setText(this.getButtonLabel("enableAll"));
-		primary.ariaLabel = session.isRunning ? "Reset bisect and restore previous states" : "Enable all items";
+		enableAllBtn.setText(this.getButtonLabel("enableAllExceptExcluded"));
+		enableAllBtn.ariaLabel = session.isRunning
+			? "Reset bisect and restore previous states"
+			: "Enable all items";
 
-		start.style.display = session.isRunning ? "none" : "";
+		disableAllBtn.setText(this.getButtonLabel("disableAllExceptExcluded"));
+		disableAllBtn.ariaLabel = "Disable all items";
+		disableAllBtn.style.display = session.isRunning ? "none" : "";
+
+		startBtn.style.display = session.isRunning ? "none" : "";
+		startReverseBtn.style.display = session.isRunning ? "none" : "";
 		yes.style.display = session.isRunning ? "" : "none";
 		no.style.display = session.isRunning ? "" : "none";
 
@@ -691,7 +872,7 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 		if (!session.isRunning) {
-			text.setText(`Click Start to begin bisecting ${this.getPluralLabel()}.`);
+			text.setText(`Click Start (Disable) or Start (Enable) to begin bisecting ${this.getPluralLabel()}.`);
 			return;
 		}
 		if (session.awaitingInitialAnswer) {
@@ -711,10 +892,32 @@ export default class divideAndConquer extends Plugin {
 					old.apply(tab, args);
 					this.addControls();
 					this.colorizeIgnoredToggles();
+					// todo this was not part of this branch, and was taken out of main
+					this.attachContainerToggleListener(mode, tab);
 				});
 			};
 			this.refreshTab?.();
 		}).bind(this, tab);
+	}
+
+	/**
+	 * Attach a single delegated click listener on the tab container so that clicking ANY
+	 * plugin/snippet toggle resets the two-click bypass state on the bulk-toggle buttons.
+	 * Using delegation means the listener survives tab re-renders — we only need to attach
+	 * it once per tab (guarded by a data attribute on the container element).
+	 */
+	private attachContainerToggleListener(mode: Mode, tab: SettingsTab) {
+		const container = tab.containerEl;
+		if (!container || container.dataset.dacToggleListenerAttached === "true") {
+			return;
+		}
+		container.dataset.dacToggleListenerAttached = "true";
+		container.addEventListener("click", (e: Event) => {
+			const target = e.target as HTMLElement;
+			if (target?.closest(".checkbox-container")) {
+				this.handleManualItemToggle(mode);
+			}
+		});
 	}
 
 	private colorizeIgnoredToggles() {
