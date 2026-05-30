@@ -46,9 +46,9 @@ function createPluginForCommands() {
 }
 
 describe("Command Registration", () => {
-	it("registers exactly 8 commands (4 plugin + 4 snippet)", () => {
+	it("registers exactly 16 commands (8 plugin + 8 snippet)", () => {
 		const plugin = createPluginForCommands();
-		expect((plugin as any).registeredCommands).toHaveLength(8);
+		expect((plugin as any).registeredCommands).toHaveLength(16);
 	});
 
 	it("all registered command IDs are unique", () => {
@@ -62,7 +62,7 @@ describe("Command Registration", () => {
 		const ids: string[] = (plugin as any).registeredCommands
 			.filter((c: any) => c.name.startsWith("Plugin"))
 			.map((c: any) => c.id);
-		expect(ids).toHaveLength(4);
+		expect(ids).toHaveLength(8);
 		ids.forEach((id) => expect(id.startsWith("plugin-")).toBe(true));
 	});
 
@@ -71,7 +71,7 @@ describe("Command Registration", () => {
 		const ids: string[] = (plugin as any).registeredCommands
 			.filter((c: any) => c.name.startsWith("Snippet"))
 			.map((c: any) => c.id);
-		expect(ids).toHaveLength(4);
+		expect(ids).toHaveLength(8);
 		ids.forEach((id) => expect(id.startsWith("snippet-")).toBe(true));
 	});
 
@@ -90,26 +90,51 @@ describe("Command Registration", () => {
 		const firstSnippetIndex = commands.findIndex((c) => c.id.startsWith("snippet-"));
 		const lastSnippetIndex = commands.findLastIndex((c) => c.id.startsWith("snippet-"));
 		expect(firstPluginIndex).toBe(0);
-		expect(lastPluginIndex).toBe(3);
-		expect(firstSnippetIndex).toBe(4);
-		expect(lastSnippetIndex).toBe(7);
+		expect(lastPluginIndex).toBe(7);
+		expect(firstSnippetIndex).toBe(8);
+		expect(lastSnippetIndex).toBe(15);
 	});
 
-	it("snippet-enable-all is registered last among snippet commands", () => {
+	it("all new bulk-toggle plugin command IDs are registered", () => {
 		const plugin = createPluginForCommands();
-		const commands: any[] = (plugin as any).registeredCommands;
-		const snippetCommands = commands.filter((c) => c.id.startsWith("snippet-"));
-		expect(snippetCommands[snippetCommands.length - 1].id).toBe("snippet-enable-all");
+		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
+		expect(ids).toContain("plugin-enable-all");
+		expect(ids).toContain("plugin-enable-all-except-excluded");
+		expect(ids).toContain("plugin-disable-all");
+		expect(ids).toContain("plugin-disable-all-except-excluded");
 	});
 
-	it("re-calling addCommands still produces 8 unique IDs (no mutation side-effects)", () => {
+	it("all new bulk-toggle snippet command IDs are registered", () => {
+		const plugin = createPluginForCommands();
+		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
+		expect(ids).toContain("snippet-enable-all");
+		expect(ids).toContain("snippet-enable-all-except-excluded");
+		expect(ids).toContain("snippet-disable-all");
+		expect(ids).toContain("snippet-disable-all-except-excluded");
+	});
+
+	it("both bisect direction commands are registered for plugins", () => {
+		const plugin = createPluginForCommands();
+		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
+		expect(ids).toContain("plugin-start-bisect");
+		expect(ids).toContain("plugin-start-bisect-reverse");
+	});
+
+	it("both bisect direction commands are registered for snippets", () => {
+		const plugin = createPluginForCommands();
+		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
+		expect(ids).toContain("snippet-start-bisect");
+		expect(ids).toContain("snippet-start-bisect-reverse");
+	});
+
+	it("re-calling addCommands still produces 16 unique IDs (no mutation side-effects)", () => {
 		const plugin = createPluginForCommands();
 		// clear and re-register
 		(plugin as any).registeredCommands = [];
 		(plugin as any).addCommands();
 		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
-		expect(ids).toHaveLength(8);
-		expect(new Set(ids).size).toBe(8);
+		expect(ids).toHaveLength(16);
+		expect(new Set(ids).size).toBe(16);
 	});
 });
 
