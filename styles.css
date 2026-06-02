@@ -138,10 +138,29 @@ Obsidian Community Plugins Page
 	margin-left: 0;
 }
 
-/* stack disable/enable buttons */
-.installed-plugins-container .setting-item-heading .setting-item-control .dac-button-stack {
+/* Keep the status label above controls and align button groups side-by-side. */
+.installed-plugins-container .setting-item-heading .setting-item-control .dac-controls-root {
 	display: flex;
 	flex-direction: column;
+	align-items: flex-start;
 	gap: 6px;
-	margin-left: 8px;
+}
+
+.installed-plugins-container .setting-item-heading .setting-item-control .dac-controls-root .dac-status-text {
+	width: 100%;
+}
+
+.installed-plugins-container .setting-item-heading .setting-item-control .dac-controls-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+/* Keep button groups horizontal. */
+.installed-plugins-container .setting-item-heading .setting-item-control .dac-button-stack {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-left: 0;
 }

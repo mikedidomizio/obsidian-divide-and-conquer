@@ -401,6 +401,20 @@ export default class divideAndConquer extends Plugin {
 			...rest
 		] = this.controls;
 
+		const statusText = rest.find((control) => control.tagName === "SPAN");
+		const remainingControls = rest.filter((control) => control !== statusText);
+
+		const controlsRoot = activeDocument.createElement("div");
+		controlsRoot.classList.add("dac-controls-root");
+
+		if (statusText) {
+			statusText.classList.add("dac-status-text");
+			controlsRoot.appendChild(statusText);
+		}
+
+		const buttonsRow = activeDocument.createElement("div");
+		buttonsRow.classList.add("dac-controls-buttons");
+
 		const bulkToggleStack = activeDocument.createElement("div");
 		bulkToggleStack.classList.add("dac-button-stack");
 		bulkToggleStack.appendChild(enableAllExceptBtn);
@@ -408,17 +422,20 @@ export default class divideAndConquer extends Plugin {
 		bulkToggleStack.appendChild(disableAllExceptBtn);
 		bulkToggleStack.appendChild(disableAllBtn);
 
-		container.appendChild(bulkToggleStack);
+		buttonsRow.appendChild(bulkToggleStack);
 
 		const startBisectStack = activeDocument.createElement("div");
 		startBisectStack.classList.add("dac-button-stack");
 		startBisectStack.appendChild(startBtn);
 		startBisectStack.appendChild(startReverseBtn);
 
-		container.appendChild(startBisectStack);
-		for (const control of rest) {
-			container.appendChild(control);
+		buttonsRow.appendChild(startBisectStack);
+		for (const control of remainingControls) {
+			buttonsRow.appendChild(control);
 		}
+
+		controlsRoot.appendChild(buttonsRow);
+		container.appendChild(controlsRoot);
 	}
 
 	private addCommands() {
