@@ -52,7 +52,7 @@ interface BisectSession {
 	awaitingInitialAnswer: boolean;
 }
 
-interface BypassState {
+interface BulkToggleModeState {
 	enable: boolean;
 	disable: boolean;
 }
@@ -194,7 +194,7 @@ export default class divideAndConquer extends Plugin {
 	mode2Tab: Map<Mode, SettingsTab> = new Map();
 	mode2Controls: Map<Mode, HTMLElement[]> = new Map();
 	mode2Session: Map<Mode, BisectSession> = new Map();
-	private mode2Bypass: Map<Mode, BypassState> = new Map();
+	private mode2BulkToggleMode: Map<Mode, BulkToggleModeState> = new Map();
 
 	get controls() {
 		return this.mode2Controls.get(this.mode) ?? [];
@@ -393,7 +393,33 @@ export default class divideAndConquer extends Plugin {
 		}
 
 		this.updateControlState();
-		for (const control of this.controls) {
+
+		const [
+			enableAllExceptBtn,
+			enableAllBtn,
+			disableAllExceptBtn,
+			disableAllBtn,
+			startBtn,
+			startReverseBtn,
+			...rest
+		] = this.controls;
+
+		const bulkToggleStack = activeDocument.createElement("div");
+		bulkToggleStack.classList.add("dac-button-stack");
+		bulkToggleStack.appendChild(enableAllExceptBtn);
+		bulkToggleStack.appendChild(enableAllBtn);
+		bulkToggleStack.appendChild(disableAllExceptBtn);
+		bulkToggleStack.appendChild(disableAllBtn);
+
+		container.appendChild(bulkToggleStack);
+
+		const startBisectStack = activeDocument.createElement("div");
+		startBisectStack.classList.add("dac-button-stack");
+		startBisectStack.appendChild(startBtn);
+		startBisectStack.appendChild(startReverseBtn);
+
+		container.appendChild(startBisectStack);
+		for (const control of rest) {
 			container.appendChild(control);
 		}
 	}
@@ -484,7 +510,7 @@ export default class divideAndConquer extends Plugin {
 			[...session.candidates].filter(id => session.enabledBeforeBisect?.has(id)),
 		);
 		session.awaitingInitialAnswer = true;
-		this.resetBypassFlags(this.mode);
+		this.resetBulkToggleModeState(this.mode);
 		// Starting bisect from settings should not immediately reload Obsidian.
 		this.skipNextReload = true;
 		await this.persistSession();
@@ -507,7 +533,7 @@ export default class divideAndConquer extends Plugin {
 		session.candidates = new Set(disabledCandidates.map(item => item.id));
 		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
 		session.awaitingInitialAnswer = false;
-		this.resetBypassFlags(this.mode);
+		this.resetBulkToggleModeState(this.mode);
 		this.skipNextReload = true;
 		await this.applyTestState(session.candidates, session.enabledUnderTest);
 		await this.persistSession();
@@ -713,23 +739,23 @@ export default class divideAndConquer extends Plugin {
 		session.awaitingInitialAnswer = false;
 	}
 
-	private getBypassState(mode: Mode): BypassState {
-		if (!this.mode2Bypass.has(mode)) {
-			this.mode2Bypass.set(mode, {enable: false, disable: false});
+	private getBulkToggleModeState(mode: Mode): BulkToggleModeState {
+		if (!this.mode2BulkToggleMode.has(mode)) {
+			this.mode2BulkToggleMode.set(mode, {enable: false, disable: false});
 		}
-		return this.mode2Bypass.get(mode)!;
+		return this.mode2BulkToggleMode.get(mode)!;
 	}
 
-	private resetBypassFlags(mode: Mode) {
-		this.mode2Bypass.set(mode, {enable: false, disable: false});
+	private resetBulkToggleModeState(mode: Mode) {
+		this.mode2BulkToggleMode.set(mode, {enable: false, disable: false});
 	}
 
 	private handleManualItemToggle(mode: Mode) {
-		const bypass = this.getBypassState(mode);
-		if (!bypass.enable && !bypass.disable) {
+		const bulkToggleMode = this.getBulkToggleModeState(mode);
+		if (!bulkToggleMode.enable && !bulkToggleMode.disable) {
 			return;
 		}
-		this.resetBypassFlags(mode);
+		this.resetBulkToggleModeState(mode);
 		this.updateControlState();
 	}
 
@@ -793,11 +819,11 @@ export default class divideAndConquer extends Plugin {
 	private getButtonLabel(id: keyof divideAndConquer) {
 		switch (id) {
 			case "enableAllExceptExcluded":
-				return "Enable All (except excluded)";
+				return "Enable Included";
 			case "enableAll":
 				return "Enable All";
 			case "disableAllExceptExcluded":
-				return "Disable All (except excluded)";
+				return "Disable Included";
 			case "disableAll":
 				return "Disable All";
 			case "startBisect":
@@ -817,30 +843,30 @@ export default class divideAndConquer extends Plugin {
 
 	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
 		if (id === "enableAllExceptExcluded") {
-			const bypass = this.getBypassState(this.mode);
-			bypass.disable = false; // Reset opposite state
-			bypass.enable = true;   // Mark that we went to full-scope
+			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
+			bulkToggleMode.disable = false; // Reset opposite state
+			bulkToggleMode.enable = true;   // Mark that we went to full-scope
 			this.updateControlState();
 			return "enableAllExceptExcluded";
 		}
 		if (id === "enableAll") {
-			const bypass = this.getBypassState(this.mode);
-			bypass.disable = false; // Reset opposite state
-			// bypass.enable stays true (we're on the full-scope version)
+			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
+			bulkToggleMode.disable = false; // Reset opposite state
+			// bulkToggleMode.enable stays true (we're on the full-scope version)
 			this.updateControlState();
 			return "enableAll";
 		}
 		if (id === "disableAllExceptExcluded") {
-			const bypass = this.getBypassState(this.mode);
-			bypass.enable = false; // Reset opposite state
-			bypass.disable = true;   // Mark that we went to full-scope
+			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
+			bulkToggleMode.enable = false; // Reset opposite state
+			bulkToggleMode.disable = true;   // Mark that we went to full-scope
 			this.updateControlState();
 			return "disableAllExceptExcluded";
 		}
 		if (id === "disableAll") {
-			const bypass = this.getBypassState(this.mode);
-			bypass.enable = false; // Reset opposite state
-			// bypass.disable stays true (we're on the full-scope version)
+			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
+			bulkToggleMode.enable = false; // Reset opposite state
+			// bulkToggleMode.disable stays true (we're on the full-scope version)
 			this.updateControlState();
 			return "disableAll";
 		}
@@ -855,31 +881,40 @@ export default class divideAndConquer extends Plugin {
 		const [enableAllExceptBtn, enableAllBtn, disableAllExceptBtn, disableAllBtn, startBtn, startReverseBtn, resetBtn, yes, no, text] = controls;
 
 		const session = this.getSession();
-		const bypass = this.getBypassState(this.mode);
+		const bulkToggleMode = this.getBulkToggleModeState(this.mode);
 
-		// Show/hide enable button pair based on bypass state
-		enableAllExceptBtn.style.display = bypass.enable ? "none" : "";
-		enableAllBtn.style.display = bypass.enable ? "" : "none";
-		const enableBtnLabel = bypass.enable ? enableAllBtn : enableAllExceptBtn;
-		enableBtnLabel.ariaLabel = "Enable all items";
+		// Show/hide enable button pair based on bulk-toggle mode state
+		enableAllExceptBtn.style.display = bulkToggleMode.enable ? "none" : "";
+		enableAllBtn.style.display = bulkToggleMode.enable ? "" : "none";
+		enableAllBtn.ariaLabel = "Enable all"
+		enableAllExceptBtn.ariaLabel = "Enable Included"
 
-		// Show/hide disable button pair based on bypass state
-		disableAllExceptBtn.style.display = bypass.disable ? "none" : "";
-		disableAllBtn.style.display = bypass.disable ? "" : "none";
-		const disableBtnLabel = bypass.disable ? disableAllBtn : disableAllExceptBtn;
-		disableBtnLabel.ariaLabel = "Disable all items";
+		// Show/hide disable button pair based on bulk-toggle mode state
+		disableAllExceptBtn.style.display = bulkToggleMode.disable ? "none" : "";
+		disableAllBtn.style.display = bulkToggleMode.disable ? "" : "none";
+		disableAllBtn.ariaLabel = "Disable all"
+		disableAllExceptBtn.ariaLabel = "Disable Included"
 
 		// Hide all enable and disable buttons during bisect
-		enableAllExceptBtn.style.display = session.isRunning ? "none" : enableAllExceptBtn.style.display;
-		enableAllBtn.style.display = session.isRunning ? "none" : enableAllBtn.style.display;
-		disableAllExceptBtn.style.display = session.isRunning ? "none" : disableAllExceptBtn.style.display;
-		disableAllBtn.style.display = session.isRunning ? "none" : disableAllBtn.style.display;
+		if (session.isRunning) {
+			enableAllExceptBtn.style.display = "none"
+			enableAllBtn.style.display = "none"
+			disableAllExceptBtn.style.display = "none"
+			disableAllBtn.style.display = "none"
+		}
 
 		startBtn.style.display = session.isRunning ? "none" : "";
+		startBtn.ariaLabel = "Start Bisect";
 		startReverseBtn.style.display = session.isRunning ? "none" : "";
+		startReverseBtn.ariaLabel = "Start Bisect (Reverse)";
+
 		resetBtn.style.display = session.isRunning ? "" : "none";
+		resetBtn.ariaLabel = "Reset bisect and restore previous states"
+
 		yes.style.display = session.isRunning ? "" : "none";
+		yes.ariaLabel = "Yes";
 		no.style.display = session.isRunning ? "" : "none";
+		no.ariaLabel = "No";
 
 		if (session.culpritId) {
 			text.setText(`The ${this.getSingularLabel()} possibly causing issues is: ${this.getDisplayName(session.culpritId)}`);
@@ -916,7 +951,7 @@ export default class divideAndConquer extends Plugin {
 
 	/**
 	 * Attach a single delegated click listener on the tab container so that clicking ANY
-	 * plugin/snippet toggle resets the two-click bypass state on the bulk-toggle buttons.
+	 * plugin/snippet toggle resets the bulk-toggle mode state on the bulk-toggle buttons.
 	 * Using delegation means the listener survives tab re-renders — we only need to attach
 	 * it once per tab (guarded by a data attribute on the container element).
 	 */
