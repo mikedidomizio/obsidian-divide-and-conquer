@@ -11,7 +11,7 @@ import divideAndConquer from "./main";
 
 export interface PersistedBisectSession {
 	isRunning: boolean;
-	direction: "disable" | "enable";
+	direction: "disable" | "enable" | null;
 	candidates: string[];
 	enabledUnderTest: string[];
 	culpritId: string | undefined;

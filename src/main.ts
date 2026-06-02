@@ -44,7 +44,7 @@ interface BisectSession {
 	isRunning: boolean;
 	/** Which direction the bisect is running: "disable" narrows enabled plugins
 	 * (disables more), "enable" narrows disabled plugins (enables more). */
-	direction: "disable" | "enable";
+	direction: "disable" | "enable" | null;
 	candidates: Set<string>;
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
@@ -666,7 +666,7 @@ export default class divideAndConquer extends Plugin {
 	private emptySession(): BisectSession {
 		return {
 			isRunning: false,
-			direction: "disable",
+			direction: null,
 			candidates: new Set<string>(),
 			enabledUnderTest: new Set<string>(),
 			culpritId: undefined,
@@ -676,8 +676,12 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private deserializeSession(session?: PersistedBisectSession): BisectSession {
+		if (!session) {
+			return this.emptySession();
+		}
+
 		// Legacy sessions without an explicit direction field are discarded rather than guessing intent.
-		if (!session || !session.direction) {
+		if (session.direction === undefined) {
 			return this.emptySession();
 		}
 
@@ -731,7 +735,7 @@ export default class divideAndConquer extends Plugin {
 
 	private clearSession(session: BisectSession) {
 		session.isRunning = false;
-		session.direction = "disable";
+		session.direction = null;
 		session.candidates = new Set();
 		session.enabledUnderTest = new Set();
 		session.culpritId = undefined;

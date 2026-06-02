@@ -158,6 +158,7 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 
 		const session = plugin.mode2Session.get("plugins")!;
 		expect(session.isRunning).toBe(false);
+		expect(session.direction).toBeNull();
 		expect(session.candidates.size).toBe(0);
 		expect(session.enabledUnderTest.size).toBe(0);
 		expect(session.awaitingInitialAnswer).toBe(false);
@@ -647,6 +648,7 @@ describe("Reverse bisect flow", () => {
 		// When early-exiting, no session is created — getSession() returns a fresh empty one
 		const session = (plugin as any).getSession();
 		expect(session.isRunning).toBe(false);
+		expect(session.direction).toBeNull();
 	});
 
 	it("startBisectReverse excludes excluded plugins from candidates", async () => {
