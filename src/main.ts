@@ -40,21 +40,18 @@ interface NameNID {
 	description?: string;
 }
 
+type BulkToggleModeState = "enable" | "disable" | null;
+
 interface BisectSession {
 	isRunning: boolean;
 	/** Which direction the bisect is running: "disable" narrows enabled plugins
 	 * (disables more), "enable" narrows disabled plugins (enables more). */
-	direction: "disable" | "enable" | null;
+	direction: BulkToggleModeState;
 	candidates: Set<string>;
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
 	enabledBeforeBisect: Set<string> | undefined;
 	awaitingInitialAnswer: boolean;
-}
-
-interface BulkToggleModeState {
-	enable: boolean;
-	disable: boolean;
 }
 
 const pluginCommands: DACCommand[] = [
@@ -745,18 +742,18 @@ export default class divideAndConquer extends Plugin {
 
 	private getBulkToggleModeState(mode: Mode): BulkToggleModeState {
 		if (!this.mode2BulkToggleMode.has(mode)) {
-			this.mode2BulkToggleMode.set(mode, {enable: false, disable: false});
+			this.mode2BulkToggleMode.set(mode, null);
 		}
 		return this.mode2BulkToggleMode.get(mode)!;
 	}
 
 	private resetBulkToggleModeState(mode: Mode) {
-		this.mode2BulkToggleMode.set(mode, {enable: false, disable: false});
+		this.mode2BulkToggleMode.set(mode, null);
 	}
 
 	private handleManualItemToggle(mode: Mode) {
 		const bulkToggleMode = this.getBulkToggleModeState(mode);
-		if (!bulkToggleMode.enable && !bulkToggleMode.disable) {
+		if (bulkToggleMode === null) {
 			return;
 		}
 		this.resetBulkToggleModeState(mode);
@@ -847,30 +844,22 @@ export default class divideAndConquer extends Plugin {
 
 	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
 		if (id === "enableAllExceptExcluded") {
-			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
-			bulkToggleMode.disable = false; // Reset opposite state
-			bulkToggleMode.enable = true;   // Mark that we went to full-scope
+			this.mode2BulkToggleMode.set(this.mode, "enable");
 			this.updateControlState();
 			return "enableAllExceptExcluded";
 		}
 		if (id === "enableAll") {
-			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
-			bulkToggleMode.disable = false; // Reset opposite state
-			// bulkToggleMode.enable stays true (we're on the full-scope version)
+			this.mode2BulkToggleMode.set(this.mode, "enable");
 			this.updateControlState();
 			return "enableAll";
 		}
 		if (id === "disableAllExceptExcluded") {
-			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
-			bulkToggleMode.enable = false; // Reset opposite state
-			bulkToggleMode.disable = true;   // Mark that we went to full-scope
+			this.mode2BulkToggleMode.set(this.mode, "disable");
 			this.updateControlState();
 			return "disableAllExceptExcluded";
 		}
 		if (id === "disableAll") {
-			const bulkToggleMode = this.getBulkToggleModeState(this.mode);
-			bulkToggleMode.enable = false; // Reset opposite state
-			// bulkToggleMode.disable stays true (we're on the full-scope version)
+			this.mode2BulkToggleMode.set(this.mode, "disable");
 			this.updateControlState();
 			return "disableAll";
 		}
@@ -888,14 +877,14 @@ export default class divideAndConquer extends Plugin {
 		const bulkToggleMode = this.getBulkToggleModeState(this.mode);
 
 		// Show/hide enable button pair based on bulk-toggle mode state
-		enableAllExceptBtn.style.display = bulkToggleMode.enable ? "none" : "";
-		enableAllBtn.style.display = bulkToggleMode.enable ? "" : "none";
+		enableAllExceptBtn.style.display = bulkToggleMode === "enable" ? "none" : "";
+		enableAllBtn.style.display = bulkToggleMode === "enable" ? "" : "none";
 		enableAllBtn.ariaLabel = "Enable all"
 		enableAllExceptBtn.ariaLabel = "Enable Included"
 
 		// Show/hide disable button pair based on bulk-toggle mode state
-		disableAllExceptBtn.style.display = bulkToggleMode.disable ? "none" : "";
-		disableAllBtn.style.display = bulkToggleMode.disable ? "" : "none";
+		disableAllExceptBtn.style.display = bulkToggleMode === "disable" ? "none" : "";
+		disableAllBtn.style.display = bulkToggleMode === "disable" ? "" : "none";
 		disableAllBtn.ariaLabel = "Disable all"
 		disableAllExceptBtn.ariaLabel = "Disable Included"
 
