@@ -487,57 +487,51 @@ describe("Two-button bulk-toggle visibility", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		const action = (plugin as any).getButtonAction("enableAllExceptExcluded");
 		expect(action).toBe("enableAllExceptExcluded");
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(true);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 	});
 
 	it("clicking Enable Included while disable mode is active resets disable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
-		(plugin as any).getBulkToggleModeState("plugins").disable = true;
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(true);
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(false);
+		(plugin as any).mode2BulkToggleMode.set("plugins", "disable");
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("disable");
 		(plugin as any).getButtonAction("enableAllExceptExcluded");
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(false);
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(true);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 	});
 
 	it("clicking Enable All while enable mode is already active returns enableAll and keeps enable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
-		(plugin as any).getBulkToggleModeState("plugins").enable = true;
+		(plugin as any).mode2BulkToggleMode.set("plugins", "enable");
 		const action = (plugin as any).getButtonAction("enableAll");
 		expect(action).toBe("enableAll");
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(true);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 	});
 
 	it("clicking Disable Included activates disable bulk-toggle mode and returns that action", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		const action = (plugin as any).getButtonAction("disableAllExceptExcluded");
 		expect(action).toBe("disableAllExceptExcluded");
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(true);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("disable");
 	});
 
 	it("clicking Disable Included while enable mode is active resets enable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
-		(plugin as any).getBulkToggleModeState("plugins").enable = true;
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(true);
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(false);
+		(plugin as any).mode2BulkToggleMode.set("plugins", "enable");
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 		(plugin as any).getButtonAction("disableAllExceptExcluded");
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(false);
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(true);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("disable");
 	});
 
 	it("clicking Disable All while disable mode is already active returns disableAll and keeps disable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
-		(plugin as any).getBulkToggleModeState("plugins").disable = true;
+		(plugin as any).mode2BulkToggleMode.set("plugins", "disable");
 		const action = (plugin as any).getButtonAction("disableAll");
 		expect(action).toBe("disableAll");
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(true);
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(false);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("disable");
 	});
 
 	it("manual item toggle clears enable/disable bulk mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
-		(plugin as any).getBulkToggleModeState("plugins").enable = true;
-		(plugin as any).getBulkToggleModeState("plugins").disable = true;
+		(plugin as any).mode2BulkToggleMode.set("plugins", "enable");
 
 		// Simulate the tab container with a checkbox-container inside it
 		const container = document.createElement("div");
@@ -552,8 +546,7 @@ describe("Two-button bulk-toggle visibility", () => {
 		// Simulate clicking the toggle
 		checkboxWrapper.click();
 
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(false);
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(false);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBeNull();
 	});
 
 	it("attachContainerToggleListener only attaches the listener once per container", () => {
@@ -580,11 +573,9 @@ describe("Two-button bulk-toggle visibility", () => {
 
 	it("bulk-toggle mode is reset when bisect starts", async () => {
 		const plugin = createPlugin(["a", "b", "c"], ["a", "b", "c"]);
-		(plugin as any).getBulkToggleModeState("plugins").enable = true;
-		(plugin as any).getBulkToggleModeState("plugins").disable = true;
+		(plugin as any).mode2BulkToggleMode.set("plugins", "disable");
 		await plugin.startBisect();
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(false);
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(false);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBeNull();
 	});
 
 	it("bulk-toggle mode stays set after first bulk click and resets when an item is manually toggled", async () => {
@@ -593,11 +584,10 @@ describe("Two-button bulk-toggle visibility", () => {
 		const firstAction = (plugin as any).getButtonAction("enableAllExceptExcluded");
 		expect(firstAction).toBe("enableAllExceptExcluded");
 		await plugin.enableAllExceptExcluded();
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(true);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 
 		(plugin as any).handleManualItemToggle("plugins");
-		expect((plugin as any).getBulkToggleModeState("plugins").enable).toBe(false);
-		expect((plugin as any).getBulkToggleModeState("plugins").disable).toBe(false);
+		expect((plugin as any).getBulkToggleModeState("plugins")).toBeNull();
 	});
 });
 
