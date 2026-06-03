@@ -383,7 +383,7 @@ export default class divideAndConquer extends Plugin {
 				el.type = "button";
 				el.classList.add("mod-cta");
 				el.ariaLabel = button.tooltip;
-				el.setText(this.getButtonLabel(button.id));
+				el.setText(this.getButtonText(button.id));
 				el.onclick = () => this.wrapCall(this.mode, button.id)?.();
 				return el;
 			});
@@ -852,7 +852,7 @@ export default class divideAndConquer extends Plugin {
 		return span;
 	}
 
-	private getButtonLabel(id: keyof divideAndConquer) {
+	private getButtonText(id: keyof divideAndConquer) {
 		switch (id) {
 			case "enableAllExceptExcluded":
 				return "Enable Included";
@@ -863,9 +863,9 @@ export default class divideAndConquer extends Plugin {
 			case "disableAll":
 				return "Disable All";
 			case "startBisect":
-				return "Start (Disable)";
+				return "Start (disable half)";
 			case "startBisectReverse":
-				return "Start (Enable)";
+				return "Start (enable half)";
 			case "resetBisect":
 				return "Reset";
 			case "answerYes":
@@ -932,9 +932,9 @@ export default class divideAndConquer extends Plugin {
 		}
 
 		startBtn.style.display = session.isRunning ? "none" : "";
-		startBtn.ariaLabel = "Start Bisect";
+		startBtn.ariaLabel = "Start bisect (disable half)";
 		startReverseBtn.style.display = session.isRunning ? "none" : "";
-		startReverseBtn.ariaLabel = "Start Bisect (Reverse)";
+		startReverseBtn.ariaLabel = "Start bisect (enable half)";
 
 		resetBtn.style.display = session.isRunning ? "" : "none";
 		resetBtn.ariaLabel = "Reset bisect and restore previous states"

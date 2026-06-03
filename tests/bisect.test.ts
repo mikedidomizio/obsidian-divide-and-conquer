@@ -465,8 +465,8 @@ describe("Two-button bulk-toggle visibility", () => {
 		expect(enableAllBtn.textContent).toBe("Enable All");
 		expect(disableAllExceptBtn.textContent).toBe("Disable Included");
 		expect(disableAllBtn.textContent).toBe("Disable All");
-		expect(startBtn.textContent).toBe("Start (Disable)");
-		expect(startReverseBtn.textContent).toBe("Start (Enable)");
+		expect(startBtn.textContent).toBe("Start (disable half)");
+		expect(startReverseBtn.textContent).toBe("Start (enable half)");
 		expect(resetBtn.textContent).toBe("Reset");
 		expect(yesBtn.textContent).toBe("Yes");
 		expect(noBtn.textContent).toBe("No");
@@ -475,8 +475,8 @@ describe("Two-button bulk-toggle visibility", () => {
 		expect(enableAllBtn.ariaLabel).toBe("Enable all");
 		expect(disableAllExceptBtn.ariaLabel).toBe("Disable Included");
 		expect(disableAllBtn.ariaLabel).toBe("Disable all");
-		expect(startBtn.ariaLabel).toBe("Start Bisect");
-		expect(startReverseBtn.ariaLabel).toBe("Start Bisect (Reverse)");
+		expect(startBtn.ariaLabel).toBe("Start bisect (disable half)");
+		expect(startReverseBtn.ariaLabel).toBe("Start bisect (enable half)");
 		expect(resetBtn.ariaLabel).toBe("Reset bisect and restore previous states");
 		expect(yesBtn.ariaLabel).toBe("Yes");
 		expect(noBtn.ariaLabel).toBe("No");
@@ -693,7 +693,7 @@ describe("Reverse bisect flow", () => {
 		const enabledNow = [...plugin.getEnabledFromObsidian()];
 		const reloaded = createPlugin(["a", "b", "c", "d"], enabledNow, [], { bisectSessions: persisted });
 
-		expect((reloaded as any).getButtonLabel("resetBisect")).toBe("Reset");
+		expect((reloaded as any).getButtonText("resetBisect")).toBe("Reset");
 		// Trigger deserialization by calling getSession
 		const session = (reloaded as any).getSession();
 		expect(session.direction).toBe("enable");
