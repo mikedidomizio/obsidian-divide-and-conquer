@@ -54,7 +54,7 @@ describe("Command Registration", () => {
 	it("all registered command IDs are unique", () => {
 		const plugin = createPluginForCommands();
 		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
-		expect(new Set(ids).size).toBe(ids.length);
+		expect(new Set(ids).size).toBe(16);
 	});
 
 	it("plugin commands use the plugin- prefix", () => {

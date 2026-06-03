@@ -16,7 +16,6 @@ export interface PersistedBisectSession {
 	enabledUnderTest: string[];
 	culpritId: string | undefined;
 	enabledBeforeBisect: string[] | undefined;
-	awaitingInitialAnswer: boolean;
 }
 
 export interface DACSettings {

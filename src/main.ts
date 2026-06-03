@@ -51,7 +51,6 @@ interface BisectSession {
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
 	enabledBeforeBisect: Set<string> | undefined;
-	awaitingInitialAnswer: boolean;
 }
 
 const pluginCommands: DACCommand[] = [
@@ -449,7 +448,7 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 
-		const controlContainer = heading?.querySelector(".setting-item-control") as HTMLElement | null | undefined;
+		const controlContainer = heading?.querySelector(".setting-item-control");
 		controlContainer?.appendChild(controlsRoot);
 	}
 
@@ -523,8 +522,8 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public async startBisect() {
-		const candidates = this.getIncludedSortedItems();
-		if (candidates.length < 1) {
+		const enabledCandidates = this.getIncludedSortedItems();
+		if (enabledCandidates.length < 1) {
 			new Notice(`No ${this.getPluralLabel()} available for bisect.`);
 			return;
 		}
@@ -534,14 +533,15 @@ export default class divideAndConquer extends Plugin {
 		session.direction = "disable";
 		session.culpritId = undefined;
 		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
-		session.candidates = new Set(candidates.map(item => item.id));
+		session.candidates = new Set(enabledCandidates.map(item => item.id));
 		session.enabledUnderTest = new Set(
 			[...session.candidates].filter(id => session.enabledBeforeBisect?.has(id)),
 		);
-		session.awaitingInitialAnswer = true;
 		this.resetBulkToggleModeState(this.mode);
 		// Starting bisect from settings should not immediately reload Obsidian.
 		this.skipNextReload = true;
+		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.enabledUnderTest]));
+		await this.applyTestState(session.candidates, session.enabledUnderTest);
 		await this.persistSession();
 	}
 
@@ -561,7 +561,6 @@ export default class divideAndConquer extends Plugin {
 		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
 		session.candidates = new Set(disabledCandidates.map(item => item.id));
 		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
-		session.awaitingInitialAnswer = false;
 		this.resetBulkToggleModeState(this.mode);
 		this.skipNextReload = true;
 		await this.applyTestState(session.candidates, session.enabledUnderTest);
@@ -575,13 +574,10 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 
-		if (session.awaitingInitialAnswer) {
-			session.awaitingInitialAnswer = false;
-			if (session.enabledUnderTest.size < 1) {
-				new Notice(`No enabled ${this.getPluralLabel()} to test.`);
-				await this.persistSession();
-				return;
-			}
+		if (session.enabledUnderTest.size < 1) {
+			new Notice(`No enabled ${this.getPluralLabel()} to test.`);
+			await this.persistSession();
+			return;
 		}
 
 		if (session.enabledUnderTest.size === 1) {
@@ -603,7 +599,6 @@ export default class divideAndConquer extends Plugin {
 			new Notice("Start bisect before answering.");
 			return;
 		}
-		session.awaitingInitialAnswer = false;
 
 		const previousCandidates = new Set(session.candidates);
 		const remainingCandidates = [...session.candidates].filter(id => !session.enabledUnderTest.has(id));
@@ -700,7 +695,6 @@ export default class divideAndConquer extends Plugin {
 			enabledUnderTest: new Set<string>(),
 			culpritId: undefined,
 			enabledBeforeBisect: undefined,
-			awaitingInitialAnswer: false,
 		};
 	}
 
@@ -721,7 +715,6 @@ export default class divideAndConquer extends Plugin {
 			enabledUnderTest: new Set(session.enabledUnderTest ?? []),
 			culpritId: session.culpritId,
 			enabledBeforeBisect: session.enabledBeforeBisect ? new Set(session.enabledBeforeBisect) : undefined,
-			awaitingInitialAnswer: session.awaitingInitialAnswer,
 		};
 	}
 
@@ -733,7 +726,6 @@ export default class divideAndConquer extends Plugin {
 			enabledUnderTest: [...session.enabledUnderTest],
 			culpritId: session.culpritId,
 			enabledBeforeBisect: session.enabledBeforeBisect ? [...session.enabledBeforeBisect] : undefined,
-			awaitingInitialAnswer: session.awaitingInitialAnswer,
 		};
 	}
 
@@ -742,8 +734,7 @@ export default class divideAndConquer extends Plugin {
 			&& session.candidates.size < 1
 			&& session.enabledUnderTest.size < 1
 			&& !session.culpritId
-			&& !session.enabledBeforeBisect
-			&& !session.awaitingInitialAnswer;
+			&& !session.enabledBeforeBisect;
 	}
 
 	private async persistSession(mode: Mode = this.mode) {
@@ -769,7 +760,6 @@ export default class divideAndConquer extends Plugin {
 		session.enabledUnderTest = new Set();
 		session.culpritId = undefined;
 		session.enabledBeforeBisect = undefined;
-		session.awaitingInitialAnswer = false;
 	}
 
 	private getBulkToggleModeState(mode: Mode): BulkToggleModeState {
@@ -835,11 +825,11 @@ export default class divideAndConquer extends Plugin {
 		if (!currentTab) {
 			return undefined;
 		}
-		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading) as HTMLElement | undefined;
+		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading)
 	}
 
 	getControlContainer(tab?: SettingsTab) {
-		return this.getControlHeading(tab)?.querySelector(".setting-item-control") as HTMLElement | undefined;
+		return this.getControlHeading(tab)?.querySelector(".setting-item-control")
 	}
 
 	getSettingsTab(id: string) {
@@ -925,10 +915,10 @@ export default class divideAndConquer extends Plugin {
 
 		// Hide all enable and disable buttons during bisect
 		if (session.isRunning) {
-			enableAllExceptBtn.style.display = "none"
-			enableAllBtn.style.display = "none"
-			disableAllExceptBtn.style.display = "none"
-			disableAllBtn.style.display = "none"
+			enableAllExceptBtn.setCssStyles({display: "none"});
+			enableAllBtn.setCssStyles({display: "none"});
+			disableAllExceptBtn.setCssStyles({display: "none"});
+			disableAllBtn.setCssStyles({display: "none"});
 		}
 
 		startBtn.style.display = session.isRunning ? "none" : "";
@@ -950,10 +940,6 @@ export default class divideAndConquer extends Plugin {
 		}
 		if (!session.isRunning) {
 			text.setText(`Click Start (Disable) or Start (Enable) to begin bisecting ${this.getPluralLabel()}.`);
-			return;
-		}
-		if (session.awaitingInitialAnswer) {
-			text.setText(`No changes yet. With your current ${this.getPluralLabel()} state, are you still having issues?`);
 			return;
 		}
 

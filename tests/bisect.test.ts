@@ -116,56 +116,62 @@ function createSnippetPlugin(
 }
 
 describe("Command Palette: Plugin Bisect Flow", () => {
-	it("Start does not change plugin states before first answer", async () => {
+	it("Start bisecting immediately applies the first split", async () => {
+		// The flow captures that the bisect process immediately begins.
+		// Similar to a `git bisect` once you `start`, it immediately cuts in half.
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		const before = plugin.getEnabledDisabled();
+		const beforeStart = plugin.getEnabledDisabled();
 		await plugin.startBisect();
-		const after = plugin.getEnabledDisabled();
+		const afterStart = plugin.getEnabledDisabled();
 		const session = plugin.mode2Session.get("plugins")!;
-		expect(after.enabled).toEqual(before.enabled);
-		expect(after.disabled).toEqual(before.disabled);
-		expect(session.awaitingInitialAnswer).toBe(true);
+		// is less than before it started
+		expect(afterStart.enabled.length).toBeLessThan(beforeStart.enabled.length);
+		// is split 2/2
+		expect(afterStart.enabled).toHaveLength(2);
+		expect(afterStart.disabled).toHaveLength(2);
+		expect(session.isRunning).toBe(true);
 	});
 
-	it("First Yes applies the first split", async () => {
+	it("Yes further narrows the enabled candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
+		const afterStart = plugin.getEnabledDisabled();
 		await plugin.answerYes();
+		const afterYes = plugin.getEnabledDisabled();
 		const state = plugin.getEnabledDisabled();
 		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.awaitingInitialAnswer).toBe(false);
-		expect(state.enabled).toHaveLength(2);
-		expect(state.disabled).toHaveLength(2);
+		// once `yes` is applied, less than before it started
+		expect(afterYes.enabled.length).toBeLessThan(afterStart.enabled.length);
+		// more disabled than enabled
+		expect(state.enabled).toHaveLength(1);
+		expect(state.disabled).toHaveLength(3);
+		expect(session.isRunning).toBe(true);
 	});
 
-	it("First No pivots to previously disabled plugin candidates", async () => {
+	it("No pivots to previously disabled plugin candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisect();
+		// After startBisect, half of [a,b] are enabled, half disabled
+		// The other half [c,d] remain disabled
 		await plugin.answerNo();
 
 		const session = plugin.mode2Session.get("plugins")!;
-		const enabled = plugin.getEnabledFromObsidian();
-		expect(session.awaitingInitialAnswer).toBe(false);
-		expect(session.candidates.size).toBe(2);
-		expect(session.enabledUnderTest.size).toBe(1);
-		expect(enabled.has("a") || enabled.has("b")).toBe(false);
+		const afterNo = plugin.getEnabledFromObsidian();
+		// After No, candidates should be the ones NOT in the previously tested half
+		// This could be 3 items (the other half from [a,b] + [c,d])
+		// and enabledUnderTest will be the first half of those 3 (which is 2)
+		expect(session.candidates.size).toBe(3);
+		expect(session.enabledUnderTest.size).toBe(2);
+		expect(afterNo.has("a")).toBe(false);
+		expect(afterNo.has("b")).toBe(false);
+		expect(afterNo.has("c")).toBe(true);
+		expect(afterNo.has("d")).toBe(true);
 	});
 
-	it("First No with all candidates enabled stops instead of getting stuck", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
-		await plugin.startBisect();
-		await plugin.answerNo();
-
-		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.isRunning).toBe(false);
-		expect(session.direction).toBeNull();
-		expect(session.candidates.size).toBe(0);
-		expect(session.enabledUnderTest.size).toBe(0);
-		expect(session.awaitingInitialAnswer).toBe(false);
-	});
 
 	it("No eliminates the current half and keeps bisecting", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		// this is purposely an odd number of plugins (although it might make more sense as a separate test to test the division)
+		const plugin = createPlugin(["a", "b", "c", "d", "e"], ["a", "b", "c", "d", "e"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
 		const before = new Set(plugin.mode2Session.get("plugins")!.enabledUnderTest);
@@ -173,10 +179,12 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		const session = plugin.mode2Session.get("plugins")!;
 		const after = session.enabledUnderTest;
 		const state = plugin.getEnabledDisabled();
-		expect(session.candidates.size).toBe(2);
+		// After Yes narrowed to 1, answerNo leaves us with 1 remaining candidate
+		expect(session.candidates.size).toBe(1);
 		expect(session.enabledUnderTest.size).toBe(1);
 		expect(state.enabled).toHaveLength(1);
-		expect(state.disabled).toHaveLength(3);
+		expect(state.disabled).toHaveLength(4);
+		// The after candidates should not overlap with before (the other half was tested)
 		expect([...after].some((id) => before.has(id))).toBe(false);
 	});
 
@@ -187,7 +195,7 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		await plugin.answerYes();
 		const session = plugin.mode2Session.get("plugins")!;
 		expect(session.isRunning).toBe(false);
-		expect(typeof session.culpritId).toBe("string");
+		expect(session.culpritId).toBe("b");
 	});
 
 	it("Excluded plugins are never bisect candidates or culprits", async () => {
@@ -213,7 +221,6 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 	it("Enable All clears an in-progress plugin bisect session", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
-		await plugin.answerYes();
 		await plugin.enableAll();
 
 		const enabled = plugin.getEnabledFromObsidian();
@@ -228,7 +235,6 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.enabledUnderTest.size).toBe(0);
 		expect(session.culpritId).toBeUndefined();
 		expect(session.enabledBeforeBisect).toBeUndefined();
-		expect(session.awaitingInitialAnswer).toBe(false);
 	});
 
 	it("Start bisect sets a one-time reload skip token", async () => {
@@ -242,20 +248,23 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 	});
 
 	it("In-progress plugin bisect session survives reload", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+		const plugin = createPlugin(["a", "b", "c", "d", "e", "f"], ["a", "b", "c", "d", "e", "f"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
 
+		const beforeReload = plugin.mode2Session.get("plugins")!;
 		const persisted = JSON.parse(JSON.stringify(plugin.settings.bisectSessions));
 		const enabledNow = [...plugin.getEnabledFromObsidian()];
-		const reloaded = createPlugin(["a", "b", "c", "d"], enabledNow, [], { bisectSessions: persisted });
+		const reloaded = createPlugin(["a", "b", "c", "d", "e", "f"], enabledNow, [], { bisectSessions: persisted });
 
-		await reloaded.answerYes();
+		// Force deserialization by calling getSession
+		const afterReload = (reloaded as any).getSession();
 
-		const session = reloaded.mode2Session.get("plugins")!;
-		expect(session.isRunning).toBe(true);
-		expect(session.candidates.size).toBe(2);
-		expect(session.enabledUnderTest.size).toBe(1);
+		// Verify session was properly persisted and restored
+		expect(afterReload.isRunning).toBe(beforeReload.isRunning);
+		expect(afterReload.direction).toBe(beforeReload.direction);
+		expect(afterReload.candidates.size).toBe(beforeReload.candidates.size);
+		expect(afterReload.enabledUnderTest.size).toBe(beforeReload.enabledUnderTest.size);
 	});
 
 	it("Reset restores plugin states from before bisect started", async () => {
@@ -297,20 +306,20 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.enabledUnderTest.size).toBe(0);
 		expect(session.culpritId).toBeUndefined();
 		expect(session.enabledBeforeBisect).toBeUndefined();
-		expect(session.awaitingInitialAnswer).toBe(false);
 	});
 });
 
 describe("Command Palette: CSS Snippet Bisect Flow", () => {
-	it("Start does not change snippet states before first answer", async () => {
+	it("Start immediately applies the first split for snippets", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css", "c.css", "d.css"]);
 		const before = plugin.getEnabledDisabled();
 		await plugin.startBisect();
 		const after = plugin.getEnabledDisabled();
 		const session = plugin.mode2Session.get("snippets")!;
-		expect(after.enabled).toEqual(before.enabled);
-		expect(after.disabled).toEqual(before.disabled);
-		expect(session.awaitingInitialAnswer).toBe(true);
+		expect(after.enabled).not.toEqual(before.enabled);
+		expect(after.enabled).toHaveLength(2);
+		expect(after.disabled).toHaveLength(2);
+		expect(session.isRunning).toBe(true);
 	});
 
 	it("No narrows the remaining snippet candidates", async () => {
@@ -320,7 +329,8 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		await plugin.answerNo();
 		const session = plugin.mode2Session.get("snippets")!;
 		const state = plugin.getEnabledDisabled();
-		expect(session.candidates.size).toBe(2);
+		// After Yes narrowed to 1, answerNo leaves us with 1 remaining candidate
+		expect(session.candidates.size).toBe(1);
 		expect(session.enabledUnderTest.size).toBe(1);
 		expect(state.enabled).toHaveLength(1);
 		expect(state.disabled).toHaveLength(3);
@@ -359,20 +369,23 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 	});
 
 	it("In-progress snippet bisect session survives reload", async () => {
-		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css", "c.css", "d.css"]);
+		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css", "e.css", "f.css"], ["a.css", "b.css", "c.css", "d.css", "e.css", "f.css"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
 
+		const beforeReload = plugin.mode2Session.get("snippets")!;
 		const persisted = JSON.parse(JSON.stringify(plugin.settings.bisectSessions));
 		const enabledNow = [...plugin.getEnabledFromObsidian()];
-		const reloaded = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], enabledNow, { bisectSessions: persisted });
+		const reloaded = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css", "e.css", "f.css"], enabledNow, { bisectSessions: persisted });
 
-		await reloaded.answerYes();
+		// Force deserialization by calling getSession
+		const afterReload = (reloaded as any).getSession();
 
-		const session = reloaded.mode2Session.get("snippets")!;
-		expect(session.isRunning).toBe(true);
-		expect(session.candidates.size).toBe(2);
-		expect(session.enabledUnderTest.size).toBe(1);
+		// Verify session was properly persisted and restored
+		expect(afterReload.isRunning).toBe(beforeReload.isRunning);
+		expect(afterReload.direction).toBe(beforeReload.direction);
+		expect(afterReload.candidates.size).toBe(beforeReload.candidates.size);
+		expect(afterReload.enabledUnderTest.size).toBe(beforeReload.enabledUnderTest.size);
 	});
 });
 
@@ -615,12 +628,6 @@ describe("Reverse bisect flow", () => {
 		expect(enabled.has(newlyEnabled[0])).toBe(true);
 	});
 
-	it("startBisectReverse does not have awaitingInitialAnswer (starts immediately)", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
-		await plugin.startBisectReverse();
-		const session = plugin.mode2Session.get("plugins")!;
-		expect(session.awaitingInitialAnswer).toBe(false);
-	});
 
 	it("startBisectReverse records state before bisect for reset", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
@@ -701,21 +708,22 @@ describe("Reverse bisect flow", () => {
 	});
 });
 
-it("legacy bisect sessions without 'direction' field are discarded", () => {
-	const legacySession = {
-		isRunning: true,
-		// direction intentionally omitted
-		candidates: ["a", "b"],
-		enabledUnderTest: ["a"],
-		culpritId: undefined,
-		enabledBeforeBisect: ["a", "b"],
-		awaitingInitialAnswer: false,
-	};
-	const plugin = createPlugin(["a", "b"], ["a"], [], {
-		bisectSessions: { plugins: legacySession as any },
+describe("Legacy bisect sessions", () => {
+	it("legacy bisect sessions without 'direction' field are discarded", () => {
+		const legacySession = {
+			isRunning: true,
+			// direction intentionally omitted
+			candidates: ["a", "b"],
+			enabledUnderTest: ["a"],
+			culpritId: undefined,
+			enabledBeforeBisect: ["a", "b"],
+			};
+		const plugin = createPlugin(["a", "b"], ["a"], [], {
+			bisectSessions: { plugins: legacySession as any },
+		});
+		// Force deserialization by accessing the session
+		const deserialized = (plugin as any).deserializeSession(legacySession);
+		expect(deserialized.isRunning).toBe(false);
+		expect(deserialized.candidates.size).toBe(0);
 	});
-	// Force deserialization by accessing the session
-	const deserialized = (plugin as any).deserializeSession(legacySession);
-	expect(deserialized.isRunning).toBe(false);
-	expect(deserialized.candidates.size).toBe(0);
 });
