@@ -448,7 +448,7 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 
-		const controlContainer = heading?.querySelector(".setting-item-control") as HTMLElement | null | undefined;
+		const controlContainer = heading?.querySelector(".setting-item-control");
 		controlContainer?.appendChild(controlsRoot);
 	}
 
@@ -825,11 +825,11 @@ export default class divideAndConquer extends Plugin {
 		if (!currentTab) {
 			return undefined;
 		}
-		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading) as HTMLElement | undefined;
+		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading)
 	}
 
 	getControlContainer(tab?: SettingsTab) {
-		return this.getControlHeading(tab)?.querySelector(".setting-item-control") as HTMLElement | undefined;
+		return this.getControlHeading(tab)?.querySelector(".setting-item-control")
 	}
 
 	getSettingsTab(id: string) {
@@ -915,10 +915,10 @@ export default class divideAndConquer extends Plugin {
 
 		// Hide all enable and disable buttons during bisect
 		if (session.isRunning) {
-			enableAllExceptBtn.style.display = "none"
-			enableAllBtn.style.display = "none"
-			disableAllExceptBtn.style.display = "none"
-			disableAllBtn.style.display = "none"
+			enableAllExceptBtn.setCssStyles({display: "none"});
+			enableAllBtn.setCssStyles({display: "none"});
+			disableAllExceptBtn.setCssStyles({display: "none"});
+			disableAllBtn.setCssStyles({display: "none"});
 		}
 
 		startBtn.style.display = session.isRunning ? "none" : "";
