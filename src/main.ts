@@ -371,8 +371,9 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private addControls() {
-		const container = this.getControlContainer();
-		if (!container) {
+		const heading = this.getControlHeading();
+		const legacyControlContainer = this.getControlContainer();
+		if (!heading && !legacyControlContainer) {
 			return;
 		}
 
@@ -414,6 +415,8 @@ export default class divideAndConquer extends Plugin {
 
 		const buttonsRow = activeDocument.createElement("div");
 		buttonsRow.classList.add("dac-controls-buttons");
+		// if we're bisecting we add this class to hide/shift elements
+		buttonsRow.classList.toggle("dac-bisecting", this.getSession().isRunning);
 
 		const bulkToggleStack = activeDocument.createElement("div");
 		bulkToggleStack.classList.add("dac-button-stack");
@@ -426,6 +429,7 @@ export default class divideAndConquer extends Plugin {
 
 		const startBisectStack = activeDocument.createElement("div");
 		startBisectStack.classList.add("dac-button-stack");
+		startBisectStack.classList.add("dac-start-bisect-stack");
 		startBisectStack.appendChild(startBtn);
 		startBisectStack.appendChild(startReverseBtn);
 
@@ -435,7 +439,18 @@ export default class divideAndConquer extends Plugin {
 		}
 
 		controlsRoot.appendChild(buttonsRow);
-		container.appendChild(controlsRoot);
+		if (heading?.parentElement) {
+			heading.parentElement.insertBefore(controlsRoot, heading.nextSibling);
+			return;
+		}
+
+		if (legacyControlContainer) {
+			legacyControlContainer.appendChild(controlsRoot);
+			return;
+		}
+
+		const controlContainer = heading?.querySelector(".setting-item-control") as HTMLElement | null | undefined;
+		controlContainer?.appendChild(controlsRoot);
 	}
 
 	private addCommands() {
@@ -815,13 +830,16 @@ export default class divideAndConquer extends Plugin {
 		return this.getAllSortedItems().find(item => item.id === id)?.name ?? id;
 	}
 
-	getControlContainer(tab?: SettingsTab) {
+	getControlHeading(tab?: SettingsTab) {
 		const currentTab = tab ?? this.tab;
 		if (!currentTab) {
 			return undefined;
 		}
-		const heading = queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading);
-		return heading?.querySelector(".setting-item-control") as HTMLElement | undefined;
+		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading) as HTMLElement | undefined;
+	}
+
+	getControlContainer(tab?: SettingsTab) {
+		return this.getControlHeading(tab)?.querySelector(".setting-item-control") as HTMLElement | undefined;
 	}
 
 	getSettingsTab(id: string) {
