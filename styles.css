@@ -134,33 +134,47 @@ Obsidian Community Plugins Page
 **/
 
 /* The action buttons that are inserted */
-.installed-plugins-container .setting-item-heading .setting-item-control .dac-button-stack button {
+.installed-plugins-container .dac-button-stack button {
 	margin-left: 0;
 }
 
 /* Keep the status label above controls and align button groups side-by-side. */
-.installed-plugins-container .setting-item-heading .setting-item-control .dac-controls-root {
+.installed-plugins-container .dac-controls-root {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 6px;
+	padding-left: 16px;
+	padding-right: 16px;
 }
 
-.installed-plugins-container .setting-item-heading .setting-item-control .dac-controls-root .dac-status-text {
+.installed-plugins-container .dac-controls-root .dac-status-text {
 	width: 100%;
 }
 
-.installed-plugins-container .setting-item-heading .setting-item-control .dac-controls-buttons {
+.installed-plugins-container .dac-controls-buttons {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
 }
 
+/* If we're bisecting we hide the divider and apply this to hide/shift */
+.installed-plugins-container .dac-controls-buttons.dac-bisecting .dac-button-stack {
+	display: none;
+}
+
 /* Keep button groups horizontal. */
-.installed-plugins-container .setting-item-heading .setting-item-control .dac-button-stack {
+.installed-plugins-container .dac-button-stack {
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
 	gap: 6px;
 	margin-left: 0;
 }
+
+/* this is the vertical separator between the two sets of buttons */
+.installed-plugins-container .dac-start-bisect-stack {
+	border-left: 1px solid var(--background-modifier-border);
+	padding-left: 8px;
+}
+
