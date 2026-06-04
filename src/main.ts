@@ -703,21 +703,18 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private overrideDisplay(mode: Mode, tab: SettingsTab, old: (...args: unknown[]) => void) {
-		return (...args: unknown[]) => {
-			const refresh = async () => {
-				this.setMode(mode);
-				await tab.reload();
-				old.apply(tab, args);
-				this.addControls();
-				this.colorizeIgnoredToggles();
-			};
-
+		return (function display(this: divideAndConquer, ...args: unknown[]) {
+			this.setMode(mode);
 			this.refreshTab = () => {
-				void refresh();
+				this.setMode(mode);
+				void tab.reload().then(() => {
+					old.apply(tab, args);
+					this.addControls();
+					this.colorizeIgnoredToggles();
+				});
 			};
-
-			void refresh();
-		};
+			this.refreshTab?.();
+		}).bind(this, tab);
 	}
 
 	private colorizeIgnoredToggles() {
