@@ -132,7 +132,7 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.isRunning).toBe(true);
 	});
 
-	it("Yes further narrows the enabled candidates", async () => {
+	it("answerYes further narrows the enabled candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
 		const afterStart = plugin.getEnabledDisabled();
@@ -148,7 +148,7 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.isRunning).toBe(true);
 	});
 
-	it("No pivots to previously disabled plugin candidates", async () => {
+	it("answerNo pivots to previously disabled plugin candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisect();
 		// After startBisect, half of [a,b] are enabled, half disabled
@@ -169,7 +169,7 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 	});
 
 
-	it("No eliminates the current half and keeps bisecting", async () => {
+	it("answerNo button eliminates the current half and keeps bisecting", async () => {
 		// this is purposely an odd number of plugins (although it might make more sense as a separate test to test the division)
 		const plugin = createPlugin(["a", "b", "c", "d", "e"], ["a", "b", "c", "d", "e"]);
 		await plugin.startBisect();
@@ -188,7 +188,7 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect([...after].some((id) => before.has(id))).toBe(false);
 	});
 
-	it("Yes finalizes the possible culprit when one candidate is left", async () => {
+	it("answerYes finalizes the possible culprit when one candidate is left", async () => {
 		const plugin = createPlugin(["a", "b"], ["a", "b"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
@@ -218,9 +218,13 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(enabled.has("a")).toBe(true);
 	});
 
-	it("Enable All clears an in-progress plugin bisect session", async () => {
+	it("enableAll button clears an in-progress plugin bisect session", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
+
+		const sessionBefore = plugin.mode2Session.get("plugins")!;
+		expect(sessionBefore.isRunning).toBe(true);
+
 		await plugin.enableAll();
 
 		const enabled = plugin.getEnabledFromObsidian();
@@ -389,8 +393,8 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 	});
 });
 
-describe("Bulk toggle: enableAllExceptExcluded / disableAll / disableAllExceptExcluded", () => {
-	it("enableAll turns everything on, even filtered items", async () => {
+describe("enableAll / enableAllExceptExcluded / disableAll / disableAllExceptExcluded", () => {
+	it("enableAll button turns everything on, even filtered items", async () => {
 		const plugin = createPlugin(["a", "b", "c"], ["b"], ["a"]);
 		await plugin.enableAll();
 		const enabled = plugin.getEnabledFromObsidian();
@@ -399,7 +403,7 @@ describe("Bulk toggle: enableAllExceptExcluded / disableAll / disableAllExceptEx
 		expect(enabled.has("c")).toBe(true);
 	});
 
-	it("enableAllExceptExcluded enables only non-excluded items", async () => {
+	it("enableAllExceptExcluded button enables only non-excluded items", async () => {
 		const plugin = createPlugin(["a", "b", "c"], [], ["^a$"]);
 		await plugin.enableAllExceptExcluded();
 		const enabled = plugin.getEnabledFromObsidian();
@@ -408,7 +412,7 @@ describe("Bulk toggle: enableAllExceptExcluded / disableAll / disableAllExceptEx
 		expect(enabled.has("c")).toBe(true);
 	});
 
-	it("disableAll disables every item except PROTECTED_IDS", async () => {
+	it("disableAll button disables every item except PROTECTED_IDS", async () => {
 		const ids = ["a", "b", "obsidian-divide-and-conquer", "hot-reload"];
 		const plugin = createPlugin(ids, ids);
 		await plugin.disableAll();
@@ -419,7 +423,7 @@ describe("Bulk toggle: enableAllExceptExcluded / disableAll / disableAllExceptEx
 		expect(enabled.has("hot-reload")).toBe(true);
 	});
 
-	it("disableAllExceptExcluded respects both the exclusion list and PROTECTED_IDS", async () => {
+	it("disableAllExceptExcluded button respects both the exclusion list and PROTECTED_IDS", async () => {
 		const ids = ["a", "b", "c", "obsidian-divide-and-conquer", "hot-reload"];
 		const plugin = createPlugin(ids, ids, ["^c$"]);
 		await plugin.disableAllExceptExcluded();
@@ -431,7 +435,7 @@ describe("Bulk toggle: enableAllExceptExcluded / disableAll / disableAllExceptEx
 		expect(enabled.has("hot-reload")).toBe(true); // PROTECTED
 	});
 
-	it("disableAll still protects PROTECTED_IDS even when they match no exclusion filter", async () => {
+	it("disableAll button still protects PROTECTED_IDS even when they match no exclusion filter", async () => {
 		const ids = ["obsidian-divide-and-conquer", "hot-reload", "x"];
 		const plugin = createPlugin(ids, ids, []);
 		await plugin.disableAll();
@@ -441,7 +445,7 @@ describe("Bulk toggle: enableAllExceptExcluded / disableAll / disableAllExceptEx
 		expect(enabled.has("x")).toBe(false);
 	});
 
-	it("disableAll clears an in-progress bisect session", async () => {
+	it("disableAll button clears an in-progress bisect session", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
 		await plugin.disableAll();
@@ -451,59 +455,60 @@ describe("Bulk toggle: enableAllExceptExcluded / disableAll / disableAllExceptEx
 	});
 });
 
+it("assigns the correct text and aria-label to each control", () => {
+	const plugin = createPlugin(["a", "b"], ["a"]);
+
+	(globalThis as any).activeDocument = document;
+	const container = document.createElement("div");
+	(plugin as any).getControlContainer = () => container;
+
+	(plugin as any).addControls();
+
+	const [
+		enableAllExceptBtn,
+		enableAllBtn,
+		disableAllExceptBtn,
+		disableAllBtn,
+		startBtn,
+		startReverseBtn,
+		resetBtn,
+		yesBtn,
+		noBtn,
+		status,
+	] = plugin.controls;
+
+	expect(enableAllExceptBtn.textContent).toBe("Enable Included");
+	expect(enableAllBtn.textContent).toBe("Enable All");
+	expect(disableAllExceptBtn.textContent).toBe("Disable Included");
+	expect(disableAllBtn.textContent).toBe("Disable All");
+	expect(startBtn.textContent).toBe("Start (disable half)");
+	expect(startReverseBtn.textContent).toBe("Start (enable half)");
+	expect(resetBtn.textContent).toBe("Reset");
+	expect(yesBtn.textContent).toBe("Yes");
+	expect(noBtn.textContent).toBe("No");
+
+	expect(enableAllExceptBtn.ariaLabel).toBe("Enable Included");
+	expect(enableAllBtn.ariaLabel).toBe("Enable all");
+	expect(disableAllExceptBtn.ariaLabel).toBe("Disable Included");
+	expect(disableAllBtn.ariaLabel).toBe("Disable all");
+	expect(startBtn.ariaLabel).toBe("Start bisect (disable half)");
+	expect(startReverseBtn.ariaLabel).toBe("Start bisect (enable half)");
+	expect(resetBtn.ariaLabel).toBe("Reset bisect and restore previous states");
+	expect(yesBtn.ariaLabel).toBe("Yes");
+	expect(noBtn.ariaLabel).toBe("No");
+	expect(status.ariaLabel).toBeUndefined();
+});
+
 describe("Two-button bulk-toggle visibility", () => {
-	it("assigns the correct text and aria-label to each control", () => {
-		const plugin = createPlugin(["a", "b"], ["a"]);
 
-		(globalThis as any).activeDocument = document;
-		const container = document.createElement("div");
-		(plugin as any).getControlContainer = () => container;
-
-		(plugin as any).addControls();
-
-		const [
-			enableAllExceptBtn,
-			enableAllBtn,
-			disableAllExceptBtn,
-			disableAllBtn,
-			startBtn,
-			startReverseBtn,
-			resetBtn,
-			yesBtn,
-			noBtn,
-			status,
-		] = plugin.controls;
-
-		expect(enableAllExceptBtn.textContent).toBe("Enable Included");
-		expect(enableAllBtn.textContent).toBe("Enable All");
-		expect(disableAllExceptBtn.textContent).toBe("Disable Included");
-		expect(disableAllBtn.textContent).toBe("Disable All");
-		expect(startBtn.textContent).toBe("Start (disable half)");
-		expect(startReverseBtn.textContent).toBe("Start (enable half)");
-		expect(resetBtn.textContent).toBe("Reset");
-		expect(yesBtn.textContent).toBe("Yes");
-		expect(noBtn.textContent).toBe("No");
-
-		expect(enableAllExceptBtn.ariaLabel).toBe("Enable Included");
-		expect(enableAllBtn.ariaLabel).toBe("Enable all");
-		expect(disableAllExceptBtn.ariaLabel).toBe("Disable Included");
-		expect(disableAllBtn.ariaLabel).toBe("Disable all");
-		expect(startBtn.ariaLabel).toBe("Start bisect (disable half)");
-		expect(startReverseBtn.ariaLabel).toBe("Start bisect (enable half)");
-		expect(resetBtn.ariaLabel).toBe("Reset bisect and restore previous states");
-		expect(yesBtn.ariaLabel).toBe("Yes");
-		expect(noBtn.ariaLabel).toBe("No");
-		expect(status.ariaLabel).toBeUndefined();
-	});
-
-	it("clicking Enable Included activates enable bulk-toggle mode and returns that action", () => {
+	it("clicking enableAllExceptExcluded button activates enable bulk-toggle mode and returns that action", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		const action = (plugin as any).getButtonAction("enableAllExceptExcluded");
 		expect(action).toBe("enableAllExceptExcluded");
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 	});
 
-	it("clicking Enable Included while disable mode is active resets disable mode", () => {
+	it("clicking enableAllExceptExcluded button while disable mode is active resets disable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		(plugin as any).mode2BulkToggleMode.set("plugins", "disable");
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("disable");
@@ -511,7 +516,7 @@ describe("Two-button bulk-toggle visibility", () => {
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 	});
 
-	it("clicking Enable All while enable mode is already active returns enableAll and keeps enable mode", () => {
+	it("clicking enableAll button while enable mode is already active returns enableAll and keeps enable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		(plugin as any).mode2BulkToggleMode.set("plugins", "enable");
 		const action = (plugin as any).getButtonAction("enableAll");
@@ -519,14 +524,14 @@ describe("Two-button bulk-toggle visibility", () => {
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
 	});
 
-	it("clicking Disable Included activates disable bulk-toggle mode and returns that action", () => {
+	it("clicking disableAllExceptExcluded button activates disable bulk-toggle mode and returns that action", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		const action = (plugin as any).getButtonAction("disableAllExceptExcluded");
 		expect(action).toBe("disableAllExceptExcluded");
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("disable");
 	});
 
-	it("clicking Disable Included while enable mode is active resets enable mode", () => {
+	it("clicking disableAllExceptExcluded button while enable mode is active resets enable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		(plugin as any).mode2BulkToggleMode.set("plugins", "enable");
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("enable");
@@ -534,7 +539,7 @@ describe("Two-button bulk-toggle visibility", () => {
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBe("disable");
 	});
 
-	it("clicking Disable All while disable mode is already active returns disableAll and keeps disable mode", () => {
+	it("clicking disableAll button while disable mode is already active returns disableAll and keeps disable mode", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
 		(plugin as any).mode2BulkToggleMode.set("plugins", "disable");
 		const action = (plugin as any).getButtonAction("disableAll");
@@ -559,6 +564,7 @@ describe("Two-button bulk-toggle visibility", () => {
 		// Simulate clicking the toggle
 		checkboxWrapper.click();
 
+		// todo bulk toggle mode?
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBeNull();
 	});
 
@@ -605,7 +611,7 @@ describe("Two-button bulk-toggle visibility", () => {
 });
 
 describe("Reverse bisect flow", () => {
-	it("startBisectReverse seeds candidates from disabled plugins only", async () => {
+	it("startBisectReverse button seeds candidates from disabled plugins only", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisectReverse();
 		const session = plugin.mode2Session.get("plugins")!;
@@ -617,7 +623,7 @@ describe("Reverse bisect flow", () => {
 		expect(session.candidates.has("d")).toBe(true);
 	});
 
-	it("startBisectReverse immediately enables the first half of disabled candidates", async () => {
+	it("startBisectReverse button immediately enables the first half of disabled candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisectReverse();
 		const session = plugin.mode2Session.get("plugins")!;
@@ -629,7 +635,7 @@ describe("Reverse bisect flow", () => {
 	});
 
 
-	it("startBisectReverse records state before bisect for reset", async () => {
+	it("startBisectReverse button records state before bisect for reset", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisectReverse();
 		const session = plugin.mode2Session.get("plugins")!;
@@ -639,7 +645,7 @@ describe("Reverse bisect flow", () => {
 		expect(session.enabledBeforeBisect?.has("d")).toBe(false);
 	});
 
-	it("startBisectReverse notices when no disabled plugins available", async () => {
+	it("startBisectReverse button notices when no disabled plugins available", async () => {
 		const plugin = createPlugin(["a", "b"], ["a", "b"]);
 		await plugin.startBisectReverse();
 		// When early-exiting, no session is created — getSession() returns a fresh empty one
@@ -648,7 +654,7 @@ describe("Reverse bisect flow", () => {
 		expect(session.direction).toBeNull();
 	});
 
-	it("startBisectReverse excludes excluded plugins from candidates", async () => {
+	it("startBisectReverse button excludes excluded plugins from candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a"], ["^d$"]);
 		await plugin.startBisectReverse();
 		const session = plugin.mode2Session.get("plugins")!;
@@ -657,7 +663,7 @@ describe("Reverse bisect flow", () => {
 		expect(session.candidates.has("c")).toBe(true);
 	});
 
-	it("answerYes in reverse bisect narrows to the first half of enabled candidates", async () => {
+	it("answerYes button in reverse bisect narrows to the first half of enabled candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a"]);
 		// b, c, d are disabled candidates
 		await plugin.startBisectReverse();
@@ -667,7 +673,7 @@ describe("Reverse bisect flow", () => {
 		expect(session.enabledUnderTest.size).toBeGreaterThanOrEqual(1);
 	});
 
-	it("answerNo in reverse bisect pivots to the second (untested) half", async () => {
+	it("answerNo button in reverse bisect pivots to the second (untested) half", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], []);
 		// all 4 are disabled
 		await plugin.startBisectReverse();
@@ -679,7 +685,7 @@ describe("Reverse bisect flow", () => {
 		expect(overlap).toBe(false);
 	});
 
-	it("reverse bisect Reset restores state from before reverse bisect started", async () => {
+	it("reverse bisect Reset button restores state from before reverse bisect started", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisectReverse();
 		await plugin.resetBisect();
