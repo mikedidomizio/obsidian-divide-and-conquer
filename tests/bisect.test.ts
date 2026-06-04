@@ -115,8 +115,9 @@ function createSnippetPlugin(
 	return plugin;
 }
 
-describe("Command Palette: Plugin Bisect Flow", () => {
-	it("Start bisecting immediately applies the first split", async () => {
+describe("Button Actions: Plugin Bisect Flow", () => {
+	describe("startBisect / answerYes / answerNo", () => {
+		it("startBisect button immediately applies the first split", async () => {
 		// The flow captures that the bisect process immediately begins.
 		// Similar to a `git bisect` once you `start`, it immediately cuts in half.
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
@@ -130,9 +131,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(afterStart.enabled).toHaveLength(2);
 		expect(afterStart.disabled).toHaveLength(2);
 		expect(session.isRunning).toBe(true);
-	});
+		});
 
-	it("answerYes further narrows the enabled candidates", async () => {
+		it("answerYes button further narrows enabled candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
 		const afterStart = plugin.getEnabledDisabled();
@@ -146,9 +147,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(state.enabled).toHaveLength(1);
 		expect(state.disabled).toHaveLength(3);
 		expect(session.isRunning).toBe(true);
-	});
+		});
 
-	it("answerNo pivots to previously disabled plugin candidates", async () => {
+		it("answerNo button pivots to previously disabled candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisect();
 		// After startBisect, half of [a,b] are enabled, half disabled
@@ -166,10 +167,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(afterNo.has("b")).toBe(false);
 		expect(afterNo.has("c")).toBe(true);
 		expect(afterNo.has("d")).toBe(true);
-	});
+		});
 
-
-	it("answerNo button eliminates the current half and keeps bisecting", async () => {
+		it("answerNo button eliminates the current half and keeps bisecting", async () => {
 		// this is purposely an odd number of plugins (although it might make more sense as a separate test to test the division)
 		const plugin = createPlugin(["a", "b", "c", "d", "e"], ["a", "b", "c", "d", "e"]);
 		await plugin.startBisect();
@@ -186,9 +186,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(state.disabled).toHaveLength(4);
 		// The after candidates should not overlap with before (the other half was tested)
 		expect([...after].some((id) => before.has(id))).toBe(false);
-	});
+		});
 
-	it("answerYes finalizes the possible culprit when one candidate is left", async () => {
+		it("answerYes button finalizes culprit when one candidate remains", async () => {
 		const plugin = createPlugin(["a", "b"], ["a", "b"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
@@ -196,9 +196,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		const session = plugin.mode2Session.get("plugins")!;
 		expect(session.isRunning).toBe(false);
 		expect(session.culpritId).toBe("b");
-	});
+		});
 
-	it("Excluded plugins are never bisect candidates or culprits", async () => {
+		it("startBisect and answers never include excluded plugins as candidates", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"], ["^a$"]);
 
 		await plugin.startBisect();
@@ -216,9 +216,11 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 
 		const enabled = plugin.getEnabledFromObsidian();
 		expect(enabled.has("a")).toBe(true);
+		});
 	});
 
-	it("enableAll button clears an in-progress plugin bisect session", async () => {
+	describe("session lifecycle buttons", () => {
+		it("enableAll button clears an in-progress plugin bisect session", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		await plugin.startBisect();
 
@@ -239,9 +241,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.enabledUnderTest.size).toBe(0);
 		expect(session.culpritId).toBeUndefined();
 		expect(session.enabledBeforeBisect).toBeUndefined();
-	});
+		});
 
-	it("Start bisect sets a one-time reload skip token", async () => {
+		it("startBisect button sets a one-time reload skip token", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 		expect((plugin as any).consumeReloadSkipToken()).toBe(false);
 
@@ -249,9 +251,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 
 		expect((plugin as any).consumeReloadSkipToken()).toBe(true);
 		expect((plugin as any).consumeReloadSkipToken()).toBe(false);
-	});
+		});
 
-	it("In-progress plugin bisect session survives reload", async () => {
+		it("in-progress bisect session survives reload", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d", "e", "f"], ["a", "b", "c", "d", "e", "f"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
@@ -269,9 +271,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(afterReload.direction).toBe(beforeReload.direction);
 		expect(afterReload.candidates.size).toBe(beforeReload.candidates.size);
 		expect(afterReload.enabledUnderTest.size).toBe(beforeReload.enabledUnderTest.size);
-	});
+		});
 
-	it("Reset restores plugin states from before bisect started", async () => {
+		it("resetBisect button restores states from before bisect started", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "c"]);
 		await plugin.startBisect();
 
@@ -289,9 +291,9 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.enabledUnderTest.size).toBe(0);
 		expect(session.culpritId).toBeUndefined();
 		expect(session.enabledBeforeBisect).toBeUndefined();
-	});
+		});
 
-	it("Reset restores plugin states correctly after multiple answers", async () => {
+		it("resetBisect button restores states correctly after multiple answers", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		const before = plugin.getEnabledDisabled();
 
@@ -310,11 +312,12 @@ describe("Command Palette: Plugin Bisect Flow", () => {
 		expect(session.enabledUnderTest.size).toBe(0);
 		expect(session.culpritId).toBeUndefined();
 		expect(session.enabledBeforeBisect).toBeUndefined();
+		});
 	});
 });
 
-describe("Command Palette: CSS Snippet Bisect Flow", () => {
-	it("Start immediately applies the first split for snippets", async () => {
+describe("Button Actions: CSS Snippet Bisect Flow", () => {
+	it("startBisect button immediately applies the first snippet split", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css", "c.css", "d.css"]);
 		const before = plugin.getEnabledDisabled();
 		await plugin.startBisect();
@@ -326,7 +329,7 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		expect(session.isRunning).toBe(true);
 	});
 
-	it("No narrows the remaining snippet candidates", async () => {
+	it("answerNo button narrows the remaining snippet candidates", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css", "c.css", "d.css"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
@@ -340,7 +343,7 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		expect(state.disabled).toHaveLength(3);
 	});
 
-	it("Enable All turns all snippets on", async () => {
+	it("enableAll button turns all snippets on", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css"], []);
 		await plugin.enableAll();
 		const enabled = plugin.getEnabledFromObsidian();
@@ -348,7 +351,7 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		expect(enabled.has("b.css")).toBe(true);
 	});
 
-	it("Reset restores snippet states from before bisect started", async () => {
+	it("resetBisect button restores snippet states from before bisect started", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css"], ["b.css"]);
 		await plugin.startBisect();
 		await plugin.resetBisect();
@@ -365,14 +368,14 @@ describe("Command Palette: CSS Snippet Bisect Flow", () => {
 		expect(session.enabledBeforeBisect).toBeUndefined();
 	});
 
-	it("Start bisect sets a one-time reload skip token for snippets too", async () => {
+	it("startBisect button sets a one-time reload skip token for snippets", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css"], ["a.css", "b.css", "c.css", "d.css"]);
 		await plugin.startBisect();
 		expect((plugin as any).consumeReloadSkipToken()).toBe(true);
 		expect((plugin as any).consumeReloadSkipToken()).toBe(false);
 	});
 
-	it("In-progress snippet bisect session survives reload", async () => {
+	it("in-progress snippet bisect session survives reload", async () => {
 		const plugin = createSnippetPlugin(["a.css", "b.css", "c.css", "d.css", "e.css", "f.css"], ["a.css", "b.css", "c.css", "d.css", "e.css", "f.css"]);
 		await plugin.startBisect();
 		await plugin.answerYes();
@@ -499,7 +502,7 @@ it("assigns the correct text and aria-label to each control", () => {
 	expect(status.ariaLabel).toBeUndefined();
 });
 
-describe("Two-button bulk-toggle visibility", () => {
+describe("Button Actions: Two-button bulk-toggle visibility", () => {
 
 	it("clicking enableAllExceptExcluded button activates enable bulk-toggle mode and returns that action", () => {
 		const plugin = createPlugin(["a", "b"], ["a"]);
@@ -564,7 +567,6 @@ describe("Two-button bulk-toggle visibility", () => {
 		// Simulate clicking the toggle
 		checkboxWrapper.click();
 
-		// todo bulk toggle mode?
 		expect((plugin as any).getBulkToggleModeState("plugins")).toBeNull();
 	});
 
@@ -610,7 +612,7 @@ describe("Two-button bulk-toggle visibility", () => {
 	});
 });
 
-describe("Reverse bisect flow", () => {
+describe("Button Actions: Reverse Plugin Bisect Flow", () => {
 	it("startBisectReverse button seeds candidates from disabled plugins only", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisectReverse();
@@ -685,7 +687,7 @@ describe("Reverse bisect flow", () => {
 		expect(overlap).toBe(false);
 	});
 
-	it("reverse bisect Reset button restores state from before reverse bisect started", async () => {
+	it("resetBisect button restores state from before reverse bisect started", async () => {
 		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
 		await plugin.startBisectReverse();
 		await plugin.resetBisect();
