@@ -131,7 +131,83 @@ describe("overrideDisplay", () => {
 			"colorize",
 		]);
 	});
+
+	it.each([
+		{ id: "community-plugins", mode: "plugins" as const },
+		{ id: "appearance", mode: "snippets" as const },
+	])("manually toggling a $mode will reset bulk toggle buttons getting reset to ensure enable/disable state is reset", async ({ id, mode }) => {
+		const callOrder: string[] = [];
+		const pluginTab = createSettingsTab("community-plugins", callOrder);
+		const snippetTab = createSettingsTab("appearance", callOrder);
+		const reloadPlugins = vi.fn(async () => {
+			callOrder.push("reload");
+		});
+		const reloadSnippets = vi.fn(async () => {
+			callOrder.push("reload");
+		});
+		const fakeApp = {
+			plugins: {
+				manifests: {},
+				enabledPlugins: new Set<string>(),
+				enablePluginAndSave: vi.fn(async () => {}),
+				disablePluginAndSave: vi.fn(async () => {}),
+				initialize: vi.fn(async () => {}),
+				loadManifests: reloadPlugins,
+			},
+			customCss: {
+				snippets: [] as string[],
+				enabledSnippets: new Set<string>(),
+				setCssEnabledStatus: vi.fn(),
+				loadSnippets: reloadSnippets,
+			},
+			commands: {
+				executeCommandById: vi.fn(),
+			},
+			workspace: {
+				onLayoutReady: vi.fn(),
+			},
+			setting: {
+				settingTabs: [pluginTab.tab, snippetTab.tab],
+			},
+		};
+
+		const plugin = new divideAndConquer(fakeApp as any, {} as any);
+		plugin.saveData = vi.fn(async () => {});
+		vi.spyOn(plugin as any, "addControls").mockImplementation(() => {
+			callOrder.push("controls");
+		});
+		vi.spyOn(plugin as any, "colorizeIgnoredToggles").mockImplementation(() => {
+			callOrder.push("colorize");
+		});
+
+		await plugin.onload();
+
+		const target = id === "community-plugins" ? pluginTab : snippetTab;
+		const reload = mode === "plugins" ? reloadPlugins : reloadSnippets;
+
+		// Add a fake checkbox to the tab container
+		const checkboxWrapper = document.createElement("div");
+		checkboxWrapper.className = "checkbox-container";
+		target.tab.containerEl.appendChild(checkboxWrapper);
+
+		// Set bulk-toggle mode to "enable"
+		(plugin as any).mode2BulkToggleMode.set(mode, "enable");
+
+		// Display the tab (which should attach the listener)
+		target.tab.display("sentinel");
+		await flushWrappedDisplay(reload);
+
+		// Verify bulk-toggle mode is still set
+		expect((plugin as any).getBulkToggleModeState(mode)).toBe("enable");
+
+		// Simulate clicking the toggle
+		checkboxWrapper.click();
+
+		// Verify bulk-toggle mode was reset by the listener
+		expect((plugin as any).getBulkToggleModeState(mode)).toBeNull();
+	});
 });
+
 
 
 

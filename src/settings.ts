@@ -68,8 +68,9 @@ export class DACSettingsTab extends PluginSettingTab {
 
 	/**
 	 * Called when the Settings for DAC is opened
+	 * is marked deprecated, but indefinitely supported (https://docs.obsidian.md/Plugins/User+interface/Settings#Legacy+imperative+display()+approach)
 	 */
-	public display(): void {
+	public override display(): void {
 		const {containerEl} = this;
 		containerEl.empty();
 		const warning = new Setting(containerEl)

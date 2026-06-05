@@ -1,6 +1,7 @@
 import {Notice, Plugin, SettingsTab} from "obsidian";
 import type {Composed, Func, Mode} from "./util";
 import {
+	DACSettings,
 	DACSettingsTab,
 	DEFAULT_SETTINGS,
 	type PersistedBisectSession
@@ -164,7 +165,7 @@ const numberOfTextElements = 1;
 const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements;
 
 export default class divideAndConquer extends Plugin {
-	settings!: typeof DEFAULT_SETTINGS;
+	declare settings: typeof DEFAULT_SETTINGS;
 	manifests = this.app.plugins.manifests;
 	private skipNextReload = false;
 	enabledColor: string | null = null;
@@ -361,7 +362,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public override async loadData() {
-		const loadedData = await super.loadData()
+		const loadedData = await super.loadData() as Partial<DACSettings>;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
 		this.settings.bisectSessions ??= {};
 	}
@@ -774,6 +775,11 @@ export default class divideAndConquer extends Plugin {
 		this.mode2BulkToggleMode.set(mode, null);
 	}
 
+	/**
+	 * To be called when a plugin/snippet manually toggled
+	 * @param mode
+	 * @private
+	 */
 	private handleManualItemToggle(mode: Mode) {
 		const bulkToggleMode = this.getBulkToggleModeState(mode);
 		if (bulkToggleMode === null) {
@@ -956,7 +962,6 @@ export default class divideAndConquer extends Plugin {
 					old.apply(tab, args);
 					this.addControls();
 					this.colorizeIgnoredToggles();
-					// todo this was not part of this branch, and was taken out of main
 					this.attachContainerToggleListener(mode, tab);
 				});
 			};
