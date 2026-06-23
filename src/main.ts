@@ -167,6 +167,10 @@ const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements;
 export default class divideAndConquer extends Plugin {
 	declare settings: typeof DEFAULT_SETTINGS;
 	manifests = this.app.plugins.manifests;
+	/**
+	 * Used to one-time skip reloading/reinitializing triggered by the user.
+	 * @private
+	 */
 	private skipNextReload = false;
 	enabledColor: string | null = null;
 	disabledColor: string | null = null;
@@ -229,24 +233,6 @@ export default class divideAndConquer extends Plugin {
 			new Notice(`Possible ${label} culprit: ${this.getDisplayName(session.culpritId)}`);
 		};
 
-		const maybeReload = async () => {
-			if (this.consumeReloadSkipToken()) {
-				return;
-			}
-			if (!this.settings.reloadAfterPluginChanges) {
-				return;
-			}
-			await this.saveData();
-			window.setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
-		};
-
-		const maybeInit = async () => {
-			if (!this.settings.initializeAfterPluginChanges) {
-				return;
-			}
-			await this.app.plugins.initialize();
-		};
-
 		this.mode2Call = new Map(Modes.map(mode => [mode, (f: Func) => async () => compose(
 			this,
 			() => this.setMode(mode),
@@ -254,12 +240,12 @@ export default class divideAndConquer extends Plugin {
 			() => this.mode2Refresh.get(this.mode)?.(),
 			() => {
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => void maybeReload())()
+				(() => void this.maybeReloadAfterPluginChanges())()
 			},
 			() => {
 				// todo if the previous step reloads, we don't need to continue here
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => void maybeInit())()
+				(() => void this.maybeInitializeAfterPluginChanges())()
 			},
 			notice,
 		).bind(this)()]));
@@ -564,6 +550,7 @@ export default class divideAndConquer extends Plugin {
 		session.candidates = new Set(disabledCandidates.map(item => item.id));
 		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
 		this.resetBulkToggleModeState(this.mode);
+		// Starting bisect from settings should not immediately reload Obsidian.
 		this.skipNextReload = true;
 		await this.applyTestState(session.candidates, session.enabledUnderTest);
 		await this.persistSession();
@@ -775,6 +762,30 @@ export default class divideAndConquer extends Plugin {
 		this.mode2BulkToggleMode.set(mode, null);
 	}
 
+	private async maybeReloadAfterPluginChanges(consumeSkipToken = true) {
+		if (this.mode !== "plugins") {
+			return;
+		}
+		if (consumeSkipToken && this.consumeReloadSkipToken()) {
+			return;
+		}
+		if (!this.settings.reloadAfterPluginChanges) {
+			return;
+		}
+		await this.saveData();
+		window.setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
+	}
+
+	private async maybeInitializeAfterPluginChanges() {
+		if (this.mode !== "plugins") {
+			return;
+		}
+		if (!this.settings.initializeAfterPluginChanges) {
+			return;
+		}
+		await this.app.plugins.initialize();
+	}
+
 	/**
 	 * To be called when a plugin/snippet manually toggled
 	 * @param mode
@@ -782,6 +793,14 @@ export default class divideAndConquer extends Plugin {
 	 */
 	private handleManualItemToggle(mode: Mode) {
 		const bulkToggleMode = this.getBulkToggleModeState(mode);
+
+		// Reload and re-initialize are plugins-only concerns: CSS snippets take effect
+		// immediately via CSS injection and have no equivalent of app.plugins.initialize().
+		if (mode === "plugins") {
+			void this.maybeReloadAfterPluginChanges(false);
+			void this.maybeInitializeAfterPluginChanges();
+		}
+
 		if (bulkToggleMode === null) {
 			return;
 		}
@@ -789,6 +808,12 @@ export default class divideAndConquer extends Plugin {
 		this.updateControlState();
 	}
 
+	/**
+	 * Whether to skip a reload or not.
+	 * skipNextReload changed to false when called.
+	 * @private
+	 * @return true if should skip, false if should not skip.
+	 */
 	private consumeReloadSkipToken() {
 		if (!this.skipNextReload) {
 			return false;
@@ -1025,3 +1050,4 @@ export default class divideAndConquer extends Plugin {
 		return this.mode2Call.get(mode)?.(this[this.getButtonAction(key)] as Func);
 	}
 }
+

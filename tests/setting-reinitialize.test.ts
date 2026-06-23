@@ -12,8 +12,14 @@ function createSettingsTab(id: string) {
 	};
 }
 
-function createPlugin(pluginIds: string[], enabledIds: string[]) {
+function createPlugin(
+	pluginIds: string[],
+	enabledIds: string[],
+	snippetIds: string[] = [],
+	enabledSnippetIds: string[] = [],
+) {
 	const enabledPlugins = new Set(enabledIds);
+	const enabledSnippets = new Set(enabledSnippetIds);
 	const manifests = Object.fromEntries(pluginIds.map((id) => [id, { id, name: id, version: "1.0.0" }]));
 	const fakeApp = {
 		plugins: {
@@ -29,9 +35,15 @@ function createPlugin(pluginIds: string[], enabledIds: string[]) {
 			loadManifests: vi.fn(async () => {}),
 		},
 		customCss: {
-			snippets: [] as string[],
-			enabledSnippets: new Set<string>(),
-			setCssEnabledStatus: vi.fn(),
+			snippets: snippetIds,
+			enabledSnippets,
+			setCssEnabledStatus: vi.fn((id: string, enabled: boolean) => {
+				if (enabled) {
+					enabledSnippets.add(id);
+					return;
+				}
+				enabledSnippets.delete(id);
+			}),
 			loadSnippets: vi.fn(async () => {}),
 		},
 		commands: {
@@ -103,6 +115,27 @@ describe("Reinitialize after plugin changes", () => {
 		});
 
 	})
+
+	describe("snippet commands", () => {
+		it("snippet bisect does not reinitialize plugins when setting enabled as Obsidian does this automatically", async () => {
+			const { plugin, fakeApp } = createPlugin(
+				["a", "b", "c", "d"],
+				["a", "b", "c", "d"],
+				["s1", "s2", "s3", "s4"],
+				["s1", "s2", "s3", "s4"],
+			);
+			await plugin.onload();
+			plugin.settings.initializeAfterPluginChanges = true;
+
+			const startBisect = getCommand(plugin, "snippet-start-bisect");
+			const answerYes = getCommand(plugin, "snippet-answer-yes");
+
+			await startBisect();
+			await answerYes();
+
+			expect(fakeApp.plugins.initialize).not.toHaveBeenCalled();
+		});
+	});
 
 })
 
