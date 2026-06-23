@@ -13,6 +13,12 @@ function createSettingsTab(id: string) {
 	};
 }
 
+function getSettingsTabOrThrow(fakeApp: any, id: string): ReturnType<typeof createSettingsTab> {
+	const tab = fakeApp.setting.settingTabs.find((settingTab: { id: string }) => settingTab.id === id);
+	expect(tab).toBeDefined();
+	return tab as ReturnType<typeof createSettingsTab>;
+}
+
 function makeManifest(id: string, name?: string) {
 	return { id, name: name ?? id, version: "1.0.0" };
 }
@@ -21,9 +27,12 @@ function createPlugin(
 	pluginIds: string[],
 	enabledIds: string[],
 	filterRegexes: string[] = [],
+	snippetIds: string[] = [],
+	enabledSnippetIds: string[] = [],
 	settingsOverride: Partial<typeof DEFAULT_SETTINGS> = {},
 ) {
 	const enabledSet = new Set<string>(enabledIds);
+	const enabledSnippets = new Set<string>(enabledSnippetIds);
 	const manifests: Record<string, any> = {};
 	pluginIds.forEach((id) => (manifests[id] = makeManifest(id)));
 
@@ -44,9 +53,15 @@ function createPlugin(
 			loadManifests: vi.fn(async () => {}),
 		},
 		customCss: {
-			snippets: [] as string[],
-			enabledSnippets: new Set<string>(),
-			setCssEnabledStatus: vi.fn(),
+			snippets: snippetIds,
+			enabledSnippets,
+			setCssEnabledStatus: vi.fn((id: string, enabled: boolean) => {
+				if (enabled) {
+					enabledSnippets.add(id);
+					return;
+				}
+				enabledSnippets.delete(id);
+			}),
 			loadSnippets: vi.fn(async () => {}),
 		},
 		commands: { executeCommandById: vi.fn() },
@@ -95,25 +110,27 @@ describe("Reload on plugin changes", () => {
 
 	describe("setting enabled", () => {
 
-		it("user changing plugins schedules app restart", async () => {
+		it("manually toggling plugins schedules app restart", async () => {
 			vi.useFakeTimers();
 
 			const { plugin, fakeApp } = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 			await plugin.onload();
 			plugin.settings.reloadAfterPluginChanges = true;
 
-			const startBisect = getCommand(plugin, "plugin-start-bisect");
-			await startBisect();
+			const pluginsTab = getSettingsTabOrThrow(fakeApp, "community-plugins")!;
 
-			await vi.advanceTimersByTimeAsync(2000);
+			const checkboxWrapper = document.createElement("div");
+			checkboxWrapper.className = "checkbox-container";
+			pluginsTab.containerEl.appendChild(checkboxWrapper);
+
+			pluginsTab.display("sentinel");
+			await Promise.resolve();
+			await Promise.resolve();
+
+			checkboxWrapper.click();
+			await Promise.resolve();
+
 			expect(fakeApp.commands.executeCommandById).not.toHaveBeenCalled();
-
-			const answerYes = getCommand(plugin, "plugin-answer-yes");
-			await answerYes();
-
-			// verifies both enabled/disabled paths
-			expect(fakeApp.plugins.enablePluginAndSave).toHaveBeenCalled();
-			expect(fakeApp.plugins.disablePluginAndSave).toHaveBeenCalled();
 
 			await vi.advanceTimersByTimeAsync(2000);
 			expect(fakeApp.commands.executeCommandById).toHaveBeenCalledWith("app:reload");
@@ -123,30 +140,56 @@ describe("Reload on plugin changes", () => {
 
 	describe("setting disabled", () => {
 
-		it("user changing plugins does not schedule app restart", async () => {
+		it("manually toggling plugins does not schedule app restart", async () => {
 			vi.useFakeTimers();
 
 			const { plugin, fakeApp } = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
 			await plugin.onload();
 			plugin.settings.reloadAfterPluginChanges = false;
 
-			const startBisect = getCommand(plugin, "plugin-start-bisect");
-			await startBisect();
+			const pluginsTab = getSettingsTabOrThrow(fakeApp, "community-plugins")!;
 
-			await vi.advanceTimersByTimeAsync(2000);
+			const checkboxWrapper = document.createElement("div");
+			checkboxWrapper.className = "checkbox-container";
+			pluginsTab.containerEl.appendChild(checkboxWrapper);
+
+			pluginsTab.display("sentinel");
+			await Promise.resolve();
+			await Promise.resolve();
+
+			checkboxWrapper.click();
+			await Promise.resolve();
+
 			expect(fakeApp.commands.executeCommandById).not.toHaveBeenCalled();
 
-			const answerYes = getCommand(plugin, "plugin-answer-yes");
-			await answerYes();
-
-			// verifies both enabled/disabled paths
-			expect(fakeApp.plugins.enablePluginAndSave).toHaveBeenCalled();
-			expect(fakeApp.plugins.disablePluginAndSave).toHaveBeenCalled();
 
 			await vi.advanceTimersByTimeAsync(2000);
 			expect(fakeApp.commands.executeCommandById).not.toHaveBeenCalledWith("app:reload");
 		});
 
 	})
+
+	describe("snippet commands", () => {
+		it("snippet bisect does not schedule app restart even when setting enabled as obsidian refreshes CSS automatically", async () => {
+			const { plugin, fakeApp } = createPlugin(
+				["a", "b", "c", "d"],
+				["a", "b", "c", "d"],
+				[],
+				["s1", "s2", "s3", "s4"],
+				["s1", "s2", "s3", "s4"],
+			);
+			await plugin.onload();
+			plugin.settings.reloadAfterPluginChanges = true;
+
+			const startBisect = getCommand(plugin, "snippet-start-bisect");
+			const answerYes = getCommand(plugin, "snippet-answer-yes");
+
+			await startBisect();
+			await answerYes();
+
+			expect(fakeApp.commands.executeCommandById).not.toHaveBeenCalled();
+			expect(fakeApp.commands.executeCommandById).not.toHaveBeenCalledWith("app:reload");
+		});
+	});
 
 });
