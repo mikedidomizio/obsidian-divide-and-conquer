@@ -215,8 +215,8 @@ export default class divideAndConquer extends Plugin {
 
 	override onunload(): void {
 		this.saveData().catch(() => {
-			throw new Error('Could not save data')
-		})
+			throw new Error('Could not save data');
+		});
 	}
 
 	override async onload() {
@@ -240,12 +240,12 @@ export default class divideAndConquer extends Plugin {
 			() => this.mode2Refresh.get(this.mode)?.(),
 			() => {
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => void this.maybeReloadAfterPluginChanges())()
+				(() => void this.maybeReloadAfterPluginChanges())();
 			},
 			() => {
 				// todo if the previous step reloads, we don't need to continue here
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => void this.maybeInitializeAfterPluginChanges())()
+				(() => void this.maybeInitializeAfterPluginChanges())();
 			},
 			notice,
 		).bind(this)()]));
@@ -857,11 +857,11 @@ export default class divideAndConquer extends Plugin {
 		if (!currentTab) {
 			return undefined;
 		}
-		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading)
+		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading);
 	}
 
 	getControlContainer(tab?: SettingsTab) {
-		return this.getControlHeading(tab)?.querySelector(".setting-item-control")
+		return this.getControlHeading(tab)?.querySelector(".setting-item-control");
 	}
 
 	getSettingsTab(id: string) {
@@ -870,7 +870,7 @@ export default class divideAndConquer extends Plugin {
 
 	private createStatusText() {
 		const span = activeDocument.createElement("span");
-		span.className = "setting-item-name"
+		span.className = "setting-item-name";
 		return span;
 	}
 
@@ -936,14 +936,14 @@ export default class divideAndConquer extends Plugin {
 		// Show/hide enable button pair based on bulk-toggle mode state
 		enableAllExceptBtn.style.display = bulkToggleMode === "enable" ? "none" : "";
 		enableAllBtn.style.display = bulkToggleMode === "enable" ? "" : "none";
-		enableAllBtn.ariaLabel = "Enable all"
-		enableAllExceptBtn.ariaLabel = "Enable Included"
+		enableAllBtn.ariaLabel = "Enable all";
+		enableAllExceptBtn.ariaLabel = "Enable Included";
 
 		// Show/hide disable button pair based on bulk-toggle mode state
 		disableAllExceptBtn.style.display = bulkToggleMode === "disable" ? "none" : "";
 		disableAllBtn.style.display = bulkToggleMode === "disable" ? "" : "none";
-		disableAllBtn.ariaLabel = "Disable all"
-		disableAllExceptBtn.ariaLabel = "Disable Included"
+		disableAllBtn.ariaLabel = "Disable all";
+		disableAllExceptBtn.ariaLabel = "Disable Included";
 
 		// Hide all enable and disable buttons during bisect
 		if (session.isRunning) {
@@ -959,7 +959,7 @@ export default class divideAndConquer extends Plugin {
 		startReverseBtn.ariaLabel = "Start bisect (enable half)";
 
 		resetBtn.style.display = session.isRunning ? "" : "none";
-		resetBtn.ariaLabel = "Reset bisect and restore previous states"
+		resetBtn.ariaLabel = "Reset bisect and restore previous states";
 
 		yes.style.display = session.isRunning ? "" : "none";
 		yes.ariaLabel = "Yes";
