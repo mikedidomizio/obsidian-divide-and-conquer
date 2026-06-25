@@ -172,9 +172,17 @@ Obsidian Community Plugins Page
 	margin-left: 0;
 }
 
-/* this is the vertical separator between the two sets of buttons */
+/* this is the vertical divider between the two sets of buttons */
 .dac-controls-root .dac-start-bisect-stack {
 	border-left: 1px solid var(--background-modifier-border);
 	padding-left: 8px;
+}
+
+/* on smaller screens the buttons go to the next line, therefore we "hide" the divider */
+@media (max-width: 1028px) {
+	.dac-controls-root .dac-start-bisect-stack {
+		border-left: 0;
+		padding-left: 0;
+	}
 }
 
