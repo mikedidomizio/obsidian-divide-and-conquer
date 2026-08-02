@@ -494,10 +494,10 @@ it("assigns the correct text and aria-label to each control", () => {
 	expect(yesBtn.textContent).toBe("Yes");
 	expect(noBtn.textContent).toBe("No");
 
-	expect(enableAllExceptBtn.ariaLabel).toBe("Enable Included");
-	expect(enableAllBtn.ariaLabel).toBe("Enable all");
-	expect(disableAllExceptBtn.ariaLabel).toBe("Disable Included");
-	expect(disableAllBtn.ariaLabel).toBe("Disable all");
+	expect(enableAllExceptBtn.ariaLabel).toBe("Enable all plugins except those on your exclusion list");
+	expect(enableAllBtn.ariaLabel).toBe("Enable all plugins, including excluded ones");
+	expect(disableAllExceptBtn.ariaLabel).toBe("Disable all plugins except those on your exclusion list");
+	expect(disableAllBtn.ariaLabel).toBe("Disable all plugins, including excluded ones (Divide & Conquer and Hot Reload are always kept on)");
 	expect(startBtn.ariaLabel).toBe("Start bisect (disable half)");
 	expect(startReverseBtn.ariaLabel).toBe("Start bisect (enable half)");
 	expect(resetBtn.ariaLabel).toBe("Reset bisect and restore previous states");

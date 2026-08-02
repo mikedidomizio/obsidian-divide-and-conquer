@@ -937,14 +937,14 @@ export default class divideAndConquer extends Plugin {
 		// Show/hide enable button pair based on bulk-toggle mode state
 		enableAllExceptBtn.style.display = bulkToggleMode === "enable" ? "none" : "";
 		enableAllBtn.style.display = bulkToggleMode === "enable" ? "" : "none";
-		enableAllBtn.ariaLabel = "Enable all";
-		enableAllExceptBtn.ariaLabel = "Enable Included";
+		enableAllBtn.ariaLabel = `Enable all ${this.getPluralLabel()}, including excluded ones`;
+		enableAllExceptBtn.ariaLabel = `Enable all ${this.getPluralLabel()} except those on your exclusion list`;
 
 		// Show/hide disable button pair based on bulk-toggle mode state
 		disableAllExceptBtn.style.display = bulkToggleMode === "disable" ? "none" : "";
 		disableAllBtn.style.display = bulkToggleMode === "disable" ? "" : "none";
-		disableAllBtn.ariaLabel = "Disable all";
-		disableAllExceptBtn.ariaLabel = "Disable Included";
+		disableAllBtn.ariaLabel = `Disable all ${this.getPluralLabel()}, including excluded ones (Divide & Conquer and Hot Reload are always kept on)`;
+		disableAllExceptBtn.ariaLabel = `Disable all ${this.getPluralLabel()} except those on your exclusion list`;
 
 		// Hide all enable and disable buttons during bisect
 		if (session.isRunning) {
