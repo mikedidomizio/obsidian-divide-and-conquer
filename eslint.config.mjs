@@ -32,6 +32,7 @@ export default tseslint.config(
 			"no-magic-numbers": "warn",
 			"object-curly-spacing": "error",
 			"obsidianmd/ui/sentence-case": "off",
+			"semi": "error",
 		}
 	}
 );

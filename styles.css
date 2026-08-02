@@ -134,6 +134,55 @@ Obsidian Community Plugins Page
 **/
 
 /* The action buttons that are inserted */
-.installed-plugins-container .setting-item-heading .setting-item-control button {
-	margin-left: 8px;
+.dac-controls-root .dac-button-stack button {
+	margin-left: 0;
 }
+
+/* Keep the status label above controls and align button groups side-by-side. */
+.dac-controls-root {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	padding-left: 16px;
+	padding-right: 16px;
+}
+
+.dac-controls-root .dac-status-text {
+	width: 100%;
+}
+
+.dac-controls-root .dac-controls-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+/* If we're bisecting we hide the divider and apply this to hide/shift */
+.dac-controls-root .dac-controls-buttons.dac-bisecting .dac-button-stack {
+	display: none;
+}
+
+/* Keep button groups horizontal. */
+.dac-controls-root .dac-button-stack {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-left: 0;
+}
+
+/* this is the vertical divider between the two sets of buttons */
+.dac-controls-root .dac-start-bisect-stack {
+	border-left: 1px solid var(--background-modifier-border);
+	padding-left: 8px;
+}
+
+/* on smaller screens the buttons go to the next line, therefore we "hide" the divider */
+@media (max-width: 1028px) {
+	.dac-controls-root .dac-start-bisect-stack {
+		border-left: 0;
+		padding-left: 0;
+	}
+}
+

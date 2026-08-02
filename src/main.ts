@@ -1,6 +1,7 @@
 import {Notice, Plugin, SettingsTab} from "obsidian";
 import type {Composed, Func, Mode} from "./util";
 import {
+	DACSettings,
 	DACSettingsTab,
 	DEFAULT_SETTINGS,
 	type PersistedBisectSession
@@ -18,6 +19,9 @@ import {around} from "monkey-around";
 import tinycolor from "tinycolor2";
 
 const CSS_DELAY = 200;
+
+/** Plugin IDs that must never be disabled by any bulk-disable or bisect operation. */
+const PROTECTED_IDS = new Set(["obsidian-divide-and-conquer", "hot-reload"]);
 
 interface DACCommand {
 	id: string;
@@ -37,25 +41,53 @@ interface NameNID {
 	description?: string;
 }
 
+type BulkToggleModeState = "enable" | "disable" | null;
+
 interface BisectSession {
 	isRunning: boolean;
+	/** Which direction the bisect is running: "disable" narrows enabled plugins
+	 * (disables more), "enable" narrows disabled plugins (enables more). */
+	direction: BulkToggleModeState;
 	candidates: Set<string>;
 	enabledUnderTest: Set<string>;
 	culpritId: string | undefined;
 	enabledBeforeBisect: Set<string> | undefined;
-	awaitingInitialAnswer: boolean;
 }
 
 const pluginCommands: DACCommand[] = [
 	{
 		id: "plugin-enable-all",
 		method: "enableAll",
-		name: "Plugin Enable All - enable every installed plugin"
+		name: "Plugin Enable All - enable every installed plugin (including excluded)"
+	},
+	{
+		id: "plugin-enable-all-except-excluded",
+		method: "enableAllExceptExcluded",
+		name: "Plugin Enable All Except Excluded - enable every installed plugin " +
+			"respecting the exclusion list"
+	},
+	{
+		id: "plugin-disable-all",
+		method: "disableAll",
+		name: "Plugin Disable All - disable every installed plugin (including excluded)"
+	},
+	{
+		id: "plugin-disable-all-except-excluded",
+		method: "disableAllExceptExcluded",
+		name: "Plugin Disable All Except Excluded - disable every installed plugin " +
+			"respecting the exclusion list"
 	},
 	{
 		id: "plugin-start-bisect",
 		method: "startBisect",
-		name: "Plugin Bisect Start - begin troubleshooting by splitting plugins in half"
+		name: "Plugin Bisect Start (Disable) - begin troubleshooting by disabling " +
+			"half your plugins"
+	},
+	{
+		id: "plugin-start-bisect-reverse",
+		method: "startBisectReverse",
+		name: "Plugin Bisect Start (Enable) - begin troubleshooting by enabling " +
+			"half your disabled plugins"
 	},
 	{
 		id: "plugin-answer-yes",
@@ -71,9 +103,39 @@ const pluginCommands: DACCommand[] = [
 
 const snippetCommands: DACCommand[] = [
 	{
+		id: "snippet-enable-all",
+		method: "enableAll",
+		name: "Snippet Enable All - enable every installed CSS snippet (including excluded)"
+	},
+	{
+		id: "snippet-enable-all-except-excluded",
+		method: "enableAllExceptExcluded",
+		name: "Snippet Enable All Except Excluded - enable every CSS snippet respecting " +
+			"the exclusion list"
+	},
+	{
+		id: "snippet-disable-all",
+		method: "disableAll",
+		name: "Snippet Disable All - disable every installed CSS snippet (including " +
+			"excluded)"
+	},
+	{
+		id: "snippet-disable-all-except-excluded",
+		method: "disableAllExceptExcluded",
+		name: "Snippet Disable All Except Excluded - disable every CSS snippet respecting " +
+			"the exclusion list"
+	},
+	{
 		id: "snippet-start-bisect",
 		method: "startBisect",
-		name: "Snippet Bisect Start - begin troubleshooting by splitting CSS snippets in half"
+		name: "Snippet Bisect Start (Disable) - begin troubleshooting by disabling " +
+			"half your CSS snippets"
+	},
+	{
+		id: "snippet-start-bisect-reverse",
+		method: "startBisectReverse",
+		name: "Snippet Bisect Start (Enable) - begin troubleshooting by enabling half " +
+			"your disabled CSS snippets"
 	},
 	{
 		id: "snippet-answer-yes",
@@ -85,26 +147,30 @@ const snippetCommands: DACCommand[] = [
 		method: "answerNo",
 		name: "Snippet Bisect No - issue does not happen with the currently enabled CSS snippets"
 	},
-	{
-		id: "snippet-enable-all",
-		method: "enableAll",
-		name: "Snippet Enable All - enable every installed CSS snippet"
-	},
 ];
 
 const UIButtons: DACButton[] = [
-	{id: "enableAll", tooltip: "Enable all items"},
-	{id: "startBisect", tooltip: "Start bisect"},
+	{id: "enableAllExceptExcluded", tooltip: "Enable All (except excluded)"},
+	{id: "enableAll", tooltip: "Enable All"},
+	{id: "disableAllExceptExcluded", tooltip: "Disable All (except excluded)"},
+	{id: "disableAll", tooltip: "Disable All"},
+	{id: "startBisect", tooltip: "Start bisect (disable half)"},
+	{id: "startBisectReverse", tooltip: "Start bisect (enable half)"},
+	{id: "resetBisect", tooltip: "Reset bisect and restore previous states"},
 	{id: "answerYes", tooltip: "Issue still happens"},
 	{id: "answerNo", tooltip: "Issue does not happen"},
 ];
 
-const numberOfTextElements = 1
-const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements
+const numberOfTextElements = 1;
+const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements;
 
 export default class divideAndConquer extends Plugin {
-	settings!: typeof DEFAULT_SETTINGS;
+	declare settings: typeof DEFAULT_SETTINGS;
 	manifests = this.app.plugins.manifests;
+	/**
+	 * Used to one-time skip reloading/reinitializing triggered by the user.
+	 * @private
+	 */
 	private skipNextReload = false;
 	enabledColor: string | null = null;
 	disabledColor: string | null = null;
@@ -129,6 +195,7 @@ export default class divideAndConquer extends Plugin {
 	mode2Tab: Map<Mode, SettingsTab> = new Map();
 	mode2Controls: Map<Mode, HTMLElement[]> = new Map();
 	mode2Session: Map<Mode, BisectSession> = new Map();
+	private mode2BulkToggleMode: Map<Mode, BulkToggleModeState> = new Map();
 
 	get controls() {
 		return this.mode2Controls.get(this.mode) ?? [];
@@ -148,8 +215,8 @@ export default class divideAndConquer extends Plugin {
 
 	override onunload(): void {
 		this.saveData().catch(() => {
-			throw new Error('Could not save data')
-		})
+			throw new Error('Could not save data');
+		});
 	}
 
 	override async onload() {
@@ -166,24 +233,6 @@ export default class divideAndConquer extends Plugin {
 			new Notice(`Possible ${label} culprit: ${this.getDisplayName(session.culpritId)}`);
 		};
 
-		const maybeReload = async () => {
-			if (this.consumeReloadSkipToken()) {
-				return;
-			}
-			if (!this.settings.reloadAfterPluginChanges) {
-				return;
-			}
-			await this.saveData();
-			window.setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
-		};
-
-		const maybeInit = async () => {
-			if (!this.settings.initializeAfterPluginChanges) {
-				return;
-			}
-			await this.app.plugins.initialize();
-		};
-
 		this.mode2Call = new Map(Modes.map(mode => [mode, (f: Func) => async () => compose(
 			this,
 			() => this.setMode(mode),
@@ -191,12 +240,12 @@ export default class divideAndConquer extends Plugin {
 			() => this.mode2Refresh.get(this.mode)?.(),
 			() => {
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => void maybeReload())()
+				(() => void this.maybeReloadAfterPluginChanges())();
 			},
 			() => {
 				// todo if the previous step reloads, we don't need to continue here
 				// intended as the compose function is expecting functions that return void, and not Promise<void>
-				(() => void maybeInit())()
+				(() => void this.maybeInitializeAfterPluginChanges())();
 			},
 			notice,
 		).bind(this)()]));
@@ -299,7 +348,8 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public override async loadData() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, super.loadData());
+		const loadedData = await super.loadData() as Partial<DACSettings>;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
 		this.settings.bisectSessions ??= {};
 	}
 
@@ -308,8 +358,9 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private addControls() {
-		const container = this.getControlContainer();
-		if (!container) {
+		const heading = this.getControlHeading();
+		const legacyControlContainer = this.getControlContainer();
+		if (!heading && !legacyControlContainer) {
 			return;
 		}
 
@@ -319,7 +370,7 @@ export default class divideAndConquer extends Plugin {
 				el.type = "button";
 				el.classList.add("mod-cta");
 				el.ariaLabel = button.tooltip;
-				el.setText(this.getButtonLabel(button.id));
+				el.setText(this.getButtonText(button.id));
 				el.onclick = () => this.wrapCall(this.mode, button.id)?.();
 				return el;
 			});
@@ -327,9 +378,66 @@ export default class divideAndConquer extends Plugin {
 		}
 
 		this.updateControlState();
-		for (const control of this.controls) {
-			container.appendChild(control);
+
+		const [
+			enableAllExceptBtn,
+			enableAllBtn,
+			disableAllExceptBtn,
+			disableAllBtn,
+			startBtn,
+			startReverseBtn,
+			...rest
+		] = this.controls;
+
+		const statusText = rest.find((control) => control.tagName === "SPAN");
+		const remainingControls = rest.filter((control) => control !== statusText);
+
+		const controlsRoot = activeDocument.createElement("div");
+		controlsRoot.classList.add("dac-controls-root");
+
+		if (statusText) {
+			statusText.classList.add("dac-status-text");
+			controlsRoot.appendChild(statusText);
 		}
+
+		const buttonsRow = activeDocument.createElement("div");
+		buttonsRow.classList.add("dac-controls-buttons");
+		// if we're bisecting we add this class to hide/shift elements
+		buttonsRow.classList.toggle("dac-bisecting", this.getSession().isRunning);
+
+		const bulkToggleStack = activeDocument.createElement("div");
+		bulkToggleStack.classList.add("dac-button-stack");
+		bulkToggleStack.appendChild(enableAllExceptBtn);
+		bulkToggleStack.appendChild(enableAllBtn);
+		bulkToggleStack.appendChild(disableAllExceptBtn);
+		bulkToggleStack.appendChild(disableAllBtn);
+
+		buttonsRow.appendChild(bulkToggleStack);
+
+		const startBisectStack = activeDocument.createElement("div");
+		startBisectStack.classList.add("dac-button-stack");
+		startBisectStack.classList.add("dac-start-bisect-stack");
+		startBisectStack.appendChild(startBtn);
+		startBisectStack.appendChild(startReverseBtn);
+
+		buttonsRow.appendChild(startBisectStack);
+		for (const control of remainingControls) {
+			buttonsRow.appendChild(control);
+		}
+
+		controlsRoot.appendChild(buttonsRow);
+		if (heading?.parentElement) {
+			heading.parentElement.insertBefore(controlsRoot, heading.nextSibling);
+			return;
+		}
+
+		if (legacyControlContainer) {
+			legacyControlContainer.appendChild(controlsRoot);
+			return;
+		}
+
+		const controlContainer = heading?.querySelector(".setting-item-control");
+		controlContainer?.appendChild(controlsRoot);
 	}
 
 	private addCommands() {
@@ -364,6 +472,27 @@ export default class divideAndConquer extends Plugin {
 		await this.persistSession();
 	}
 
+	public async enableAllExceptExcluded() {
+		const included = this.getIncludedSortedItems();
+		await this.enableItems(included.map(item => item.id));
+		this.clearSession(this.getSession());
+		await this.persistSession();
+	}
+
+	public async disableAll() {
+		const allItems = this.getAllSortedItems();
+		await this.disableItems(allItems.map(item => item.id));
+		this.clearSession(this.getSession());
+		await this.persistSession();
+	}
+
+	public async disableAllExceptExcluded() {
+		const included = this.getIncludedSortedItems();
+		await this.disableItems(included.map(item => item.id));
+		this.clearSession(this.getSession());
+		await this.persistSession();
+	}
+
 	public async resetBisect() {
 		const session = this.getSession();
 		const enabledBeforeBisect = session.enabledBeforeBisect;
@@ -381,23 +510,50 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public async startBisect() {
-		const candidates = this.getIncludedSortedItems();
-		if (candidates.length < 1) {
-			new Notice(`No ${this.getPluralLabel()} available for bisect.`);
+		const includedItems = this.getIncludedSortedItems();
+		const enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		const enabledCandidates = includedItems.filter(item => enabledBeforeBisect.has(item.id));
+
+		if (enabledCandidates.length < 1) {
+			new Notice(`No enabled ${this.getPluralLabel()} available for bisect.`);
 			return;
 		}
 
 		const session = this.getSession();
 		session.isRunning = true;
+		session.direction = "disable";
 		session.culpritId = undefined;
-		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
-		session.candidates = new Set(candidates.map(item => item.id));
-		session.enabledUnderTest = new Set(
-			[...session.candidates].filter(id => session.enabledBeforeBisect?.has(id)),
-		);
-		session.awaitingInitialAnswer = true;
+		session.enabledBeforeBisect = enabledBeforeBisect;
+		session.candidates = new Set(enabledCandidates.map(item => item.id));
+		this.resetBulkToggleModeState(this.mode);
 		// Starting bisect from settings should not immediately reload Obsidian.
 		this.skipNextReload = true;
+		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
+		await this.applyTestState(session.candidates, session.enabledUnderTest);
+		await this.persistSession();
+	}
+
+	public async startBisectReverse() {
+		const includedItems = this.getIncludedSortedItems();
+		const enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		const disabledCandidates = includedItems.filter(item => !enabledBeforeBisect.has(item.id));
+
+		if (disabledCandidates.length < 1) {
+			new Notice(`No disabled ${this.getPluralLabel()} available for reverse bisect.`);
+			return;
+		}
+
+		const session = this.getSession();
+		session.isRunning = true;
+		session.direction = "enable";
+		session.culpritId = undefined;
+		session.enabledBeforeBisect = enabledBeforeBisect;
+		session.candidates = new Set(disabledCandidates.map(item => item.id));
+		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
+		this.resetBulkToggleModeState(this.mode);
+		// Starting bisect from settings should not immediately reload Obsidian.
+		this.skipNextReload = true;
+		await this.applyTestState(session.candidates, session.enabledUnderTest);
 		await this.persistSession();
 	}
 
@@ -408,13 +564,10 @@ export default class divideAndConquer extends Plugin {
 			return;
 		}
 
-		if (session.awaitingInitialAnswer) {
-			session.awaitingInitialAnswer = false;
-			if (session.enabledUnderTest.size < 1) {
-				new Notice(`No enabled ${this.getPluralLabel()} to test.`);
-				await this.persistSession();
-				return;
-			}
+		if (session.enabledUnderTest.size < 1) {
+			new Notice(`No enabled ${this.getPluralLabel()} to test.`);
+			await this.persistSession();
+			return;
 		}
 
 		if (session.enabledUnderTest.size === 1) {
@@ -436,7 +589,6 @@ export default class divideAndConquer extends Plugin {
 			new Notice("Start bisect before answering.");
 			return;
 		}
-		session.awaitingInitialAnswer = false;
 
 		const previousCandidates = new Set(session.candidates);
 		const remainingCandidates = [...session.candidates].filter(id => !session.enabledUnderTest.has(id));
@@ -510,7 +662,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	async disableItems(items: string[] | Set<string>) {
-		const list = [...items];
+		const list = [...items].filter(id => !PROTECTED_IDS.has(id));
 		for (const id of list) {
 			await this.disableItem(id);
 		}
@@ -525,36 +677,45 @@ export default class divideAndConquer extends Plugin {
 		return this.mode2Session.get(this.mode) as BisectSession;
 	}
 
+	private emptySession(): BisectSession {
+		return {
+			isRunning: false,
+			direction: null,
+			candidates: new Set<string>(),
+			enabledUnderTest: new Set<string>(),
+			culpritId: undefined,
+			enabledBeforeBisect: undefined,
+		};
+	}
+
 	private deserializeSession(session?: PersistedBisectSession): BisectSession {
 		if (!session) {
-			return {
-				isRunning: false,
-				candidates: new Set<string>(),
-				enabledUnderTest: new Set<string>(),
-				culpritId: undefined,
-				enabledBeforeBisect: undefined,
-				awaitingInitialAnswer: false,
-			};
+			return this.emptySession();
+		}
+
+		// Legacy sessions without an explicit direction field are discarded rather than guessing intent.
+		if (session.direction === undefined) {
+			return this.emptySession();
 		}
 
 		return {
 			isRunning: session.isRunning,
+			direction: session.direction,
 			candidates: new Set(session.candidates ?? []),
 			enabledUnderTest: new Set(session.enabledUnderTest ?? []),
 			culpritId: session.culpritId,
 			enabledBeforeBisect: session.enabledBeforeBisect ? new Set(session.enabledBeforeBisect) : undefined,
-			awaitingInitialAnswer: session.awaitingInitialAnswer,
 		};
 	}
 
 	private serializeSession(session: BisectSession): PersistedBisectSession {
 		return {
 			isRunning: session.isRunning,
+			direction: session.direction,
 			candidates: [...session.candidates],
 			enabledUnderTest: [...session.enabledUnderTest],
 			culpritId: session.culpritId,
 			enabledBeforeBisect: session.enabledBeforeBisect ? [...session.enabledBeforeBisect] : undefined,
-			awaitingInitialAnswer: session.awaitingInitialAnswer,
 		};
 	}
 
@@ -563,8 +724,7 @@ export default class divideAndConquer extends Plugin {
 			&& session.candidates.size < 1
 			&& session.enabledUnderTest.size < 1
 			&& !session.culpritId
-			&& !session.enabledBeforeBisect
-			&& !session.awaitingInitialAnswer;
+			&& !session.enabledBeforeBisect;
 	}
 
 	private async persistSession(mode: Mode = this.mode) {
@@ -585,13 +745,76 @@ export default class divideAndConquer extends Plugin {
 
 	private clearSession(session: BisectSession) {
 		session.isRunning = false;
+		session.direction = null;
 		session.candidates = new Set();
 		session.enabledUnderTest = new Set();
 		session.culpritId = undefined;
 		session.enabledBeforeBisect = undefined;
-		session.awaitingInitialAnswer = false;
 	}
 
+	private getBulkToggleModeState(mode: Mode): BulkToggleModeState {
+		if (!this.mode2BulkToggleMode.has(mode)) {
+			this.mode2BulkToggleMode.set(mode, null);
+		}
+		return this.mode2BulkToggleMode.get(mode)!;
+	}
+
+	private resetBulkToggleModeState(mode: Mode) {
+		this.mode2BulkToggleMode.set(mode, null);
+	}
+
+	private async maybeReloadAfterPluginChanges(consumeSkipToken = true) {
+		if (this.mode !== "plugins") {
+			return;
+		}
+		if (consumeSkipToken && this.consumeReloadSkipToken()) {
+			return;
+		}
+		if (!this.settings.reloadAfterPluginChanges) {
+			return;
+		}
+		await this.saveData();
+		window.setTimeout(() => this.app.commands.executeCommandById("app:reload"), 2000);
+	}
+
+	private async maybeInitializeAfterPluginChanges() {
+		if (this.mode !== "plugins") {
+			return;
+		}
+		if (!this.settings.initializeAfterPluginChanges) {
+			return;
+		}
+		await this.app.plugins.initialize();
+	}
+
+	/**
+	 * To be called when a plugin/snippet manually toggled
+	 * @param mode
+	 * @private
+	 */
+	private handleManualItemToggle(mode: Mode) {
+		const bulkToggleMode = this.getBulkToggleModeState(mode);
+
+		// Reload and re-initialize are plugins-only concerns: CSS snippets take effect
+		// immediately via CSS injection and have no equivalent of app.plugins.initialize().
+		if (mode === "plugins") {
+			void this.maybeReloadAfterPluginChanges(false);
+			void this.maybeInitializeAfterPluginChanges();
+		}
+
+		if (bulkToggleMode === null) {
+			return;
+		}
+		this.resetBulkToggleModeState(mode);
+		this.updateControlState();
+	}
+
+	/**
+	 * Whether to skip a reload or not.
+	 * skipNextReload changed to false when called.
+	 * @private
+	 * @return true if should skip, false if should not skip.
+	 */
 	private consumeReloadSkipToken() {
 		if (!this.skipNextReload) {
 			return false;
@@ -630,13 +853,16 @@ export default class divideAndConquer extends Plugin {
 		return this.getAllSortedItems().find(item => item.id === id)?.name ?? id;
 	}
 
-	getControlContainer(tab?: SettingsTab) {
+	getControlHeading(tab?: SettingsTab) {
 		const currentTab = tab ?? this.tab;
 		if (!currentTab) {
 			return undefined;
 		}
-		const heading = queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading);
-		return heading?.querySelector(".setting-item-control") as HTMLElement | undefined;
+		return queryText(currentTab.containerEl, ".setting-item-heading", currentTab.heading);
+	}
+
+	getControlContainer(tab?: SettingsTab) {
+		return this.getControlHeading(tab)?.querySelector(".setting-item-control");
 	}
 
 	getSettingsTab(id: string) {
@@ -645,16 +871,26 @@ export default class divideAndConquer extends Plugin {
 
 	private createStatusText() {
 		const span = activeDocument.createElement("span");
-		span.className = "setting-item-name"
+		span.className = "setting-item-name";
 		return span;
 	}
 
-	private getButtonLabel(id: keyof divideAndConquer) {
+	private getButtonText(id: keyof divideAndConquer) {
 		switch (id) {
+			case "enableAllExceptExcluded":
+				return "Enable Included";
 			case "enableAll":
-				return this.getSession().isRunning ? "Reset" : "Enable All";
+				return "Enable All";
+			case "disableAllExceptExcluded":
+				return "Disable Included";
+			case "disableAll":
+				return "Disable All";
 			case "startBisect":
-				return "Start";
+				return "Start (disable half)";
+			case "startBisectReverse":
+				return "Start (enable half)";
+			case "resetBisect":
+				return "Reset";
 			case "answerYes":
 				return "Yes";
 			case "answerNo":
@@ -665,8 +901,25 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	private getButtonAction(id: keyof divideAndConquer): keyof divideAndConquer {
-		if (id === "enableAll" && this.getSession().isRunning) {
-			return "resetBisect";
+		if (id === "enableAllExceptExcluded") {
+			this.mode2BulkToggleMode.set(this.mode, "enable");
+			this.updateControlState();
+			return "enableAllExceptExcluded";
+		}
+		if (id === "enableAll") {
+			this.mode2BulkToggleMode.set(this.mode, "enable");
+			this.updateControlState();
+			return "enableAll";
+		}
+		if (id === "disableAllExceptExcluded") {
+			this.mode2BulkToggleMode.set(this.mode, "disable");
+			this.updateControlState();
+			return "disableAllExceptExcluded";
+		}
+		if (id === "disableAll") {
+			this.mode2BulkToggleMode.set(this.mode, "disable");
+			this.updateControlState();
+			return "disableAll";
 		}
 		return id;
 	}
@@ -676,26 +929,50 @@ export default class divideAndConquer extends Plugin {
 		if (controls.length !== numberOfButtonsAndTextElements) {
 			return;
 		}
-		const [primary, start, yes, no, text] = controls;
+		const [enableAllExceptBtn, enableAllBtn, disableAllExceptBtn, disableAllBtn, startBtn, startReverseBtn, resetBtn, yes, no, text] = controls;
 
 		const session = this.getSession();
-		primary.setText(this.getButtonLabel("enableAll"));
-		primary.ariaLabel = session.isRunning ? "Reset bisect and restore previous states" : "Enable all items";
+		const bulkToggleMode = this.getBulkToggleModeState(this.mode);
 
-		start.style.display = session.isRunning ? "none" : "";
+		// Show/hide enable button pair based on bulk-toggle mode state
+		enableAllExceptBtn.style.display = bulkToggleMode === "enable" ? "none" : "";
+		enableAllBtn.style.display = bulkToggleMode === "enable" ? "" : "none";
+		enableAllBtn.ariaLabel = `Enable all ${this.getPluralLabel()}, including excluded ones`;
+		enableAllExceptBtn.ariaLabel = `Enable all ${this.getPluralLabel()} except those on your exclusion list`;
+
+		// Show/hide disable button pair based on bulk-toggle mode state
+		disableAllExceptBtn.style.display = bulkToggleMode === "disable" ? "none" : "";
+		disableAllBtn.style.display = bulkToggleMode === "disable" ? "" : "none";
+		disableAllBtn.ariaLabel = `Disable all ${this.getPluralLabel()}, including excluded ones (Divide & Conquer and Hot Reload are always kept on)`;
+		disableAllExceptBtn.ariaLabel = `Disable all ${this.getPluralLabel()} except those on your exclusion list`;
+
+		// Hide all enable and disable buttons during bisect
+		if (session.isRunning) {
+			enableAllExceptBtn.setCssStyles({display: "none"});
+			enableAllBtn.setCssStyles({display: "none"});
+			disableAllExceptBtn.setCssStyles({display: "none"});
+			disableAllBtn.setCssStyles({display: "none"});
+		}
+
+		startBtn.style.display = session.isRunning ? "none" : "";
+		startBtn.ariaLabel = "Start bisect (disable half)";
+		startReverseBtn.style.display = session.isRunning ? "none" : "";
+		startReverseBtn.ariaLabel = "Start bisect (enable half)";
+
+		resetBtn.style.display = session.isRunning ? "" : "none";
+		resetBtn.ariaLabel = "Reset bisect and restore previous states";
+
 		yes.style.display = session.isRunning ? "" : "none";
+		yes.ariaLabel = "Yes";
 		no.style.display = session.isRunning ? "" : "none";
+		no.ariaLabel = "No";
 
 		if (session.culpritId) {
 			text.setText(`The ${this.getSingularLabel()} possibly causing issues is: ${this.getDisplayName(session.culpritId)}`);
 			return;
 		}
 		if (!session.isRunning) {
-			text.setText(`Click Start to begin bisecting ${this.getPluralLabel()}.`);
-			return;
-		}
-		if (session.awaitingInitialAnswer) {
-			text.setText(`No changes yet. With your current ${this.getPluralLabel()} state, are you still having issues?`);
+			text.setText(`Click Start (Disable) or Start (Enable) to begin bisecting ${this.getPluralLabel()}.`);
 			return;
 		}
 
@@ -711,10 +988,31 @@ export default class divideAndConquer extends Plugin {
 					old.apply(tab, args);
 					this.addControls();
 					this.colorizeIgnoredToggles();
+					this.attachContainerToggleListener(mode, tab);
 				});
 			};
 			this.refreshTab?.();
 		}).bind(this, tab);
+	}
+
+	/**
+	 * Attach a single delegated click listener on the tab container so that clicking ANY
+	 * plugin/snippet toggle resets the bulk-toggle mode state on the bulk-toggle buttons.
+	 * Using delegation means the listener survives tab re-renders — we only need to attach
+	 * it once per tab (guarded by a data attribute on the container element).
+	 */
+	private attachContainerToggleListener(mode: Mode, tab: SettingsTab) {
+		const container = tab.containerEl;
+		if (!container || container.dataset.dacToggleListenerAttached === "true") {
+			return;
+		}
+		container.dataset.dacToggleListenerAttached = "true";
+		container.addEventListener("click", (e: Event) => {
+			const target = e.target as HTMLElement;
+			if (target?.closest(".checkbox-container")) {
+				this.handleManualItemToggle(mode);
+			}
+		});
 	}
 
 	private colorizeIgnoredToggles() {
@@ -753,3 +1051,4 @@ export default class divideAndConquer extends Plugin {
 		return this.mode2Call.get(mode)?.(this[this.getButtonAction(key)] as Func);
 	}
 }
+

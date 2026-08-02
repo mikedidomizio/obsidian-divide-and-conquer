@@ -11,11 +11,11 @@ import divideAndConquer from "./main";
 
 export interface PersistedBisectSession {
 	isRunning: boolean;
+	direction: "disable" | "enable" | null;
 	candidates: string[];
 	enabledUnderTest: string[];
 	culpritId: string | undefined;
 	enabledBeforeBisect: string[] | undefined;
-	awaitingInitialAnswer: boolean;
 }
 
 export interface DACSettings {
@@ -68,13 +68,14 @@ export class DACSettingsTab extends PluginSettingTab {
 
 	/**
 	 * Called when the Settings for DAC is opened
+	 * is marked deprecated, but indefinitely supported (https://docs.obsidian.md/Plugins/User+interface/Settings#Legacy+imperative+display()+approach)
 	 */
-	public display(): void {
+	public override display(): void {
 		const {containerEl} = this;
 		containerEl.empty();
 		const warning = new Setting(containerEl)
 			.setName('Warning')
-			.setDesc('Reinitializing or Reloading may cause disabled plugins to disappear; close and open the menu to see them again.')
+			.setDesc('Reinitializing or Reloading may cause disabled plugins to disappear; close and open the menu to see them again.');
 		warning.settingEl.classList.add('dac-warning-setting', 'mod-warning');
 
 		new Setting(containerEl)
@@ -185,7 +186,7 @@ export class DACSettingsTab extends PluginSettingTab {
 			await this.plugin.saveData();
 			area.setValue(
 				[...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n')
-			)
+			);
 			// Keep this textarea interactive for click-to-exclude while preventing direct edits.
 			area.inputEl.setAttr('readonly', true);
 		};
@@ -209,7 +210,7 @@ export class DACSettingsTab extends PluginSettingTab {
 				textArea.setPlaceholder(placeholder ?? "").setValue(value);
 			}
 			const includedItemsText = [...(this.plugin.getIncludedItems(mode))].map(p => p.name ?? p.id).join('\n');
-			textArea.setPlaceholder(placeholder ?? includedItemsText)
+			textArea.setPlaceholder(placeholder ?? includedItemsText);
 
 			if (!disabledArea) {
 				textArea.setValue(includedItemsText);
