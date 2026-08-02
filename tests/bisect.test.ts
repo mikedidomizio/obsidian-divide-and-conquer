@@ -149,24 +149,28 @@ describe("Button Actions: Plugin Bisect Flow", () => {
 		expect(session.isRunning).toBe(true);
 		});
 
-		it("answerNo button pivots to previously disabled candidates", async () => {
-		const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
-		await plugin.startBisect();
-		// After startBisect, half of [a,b] are enabled, half disabled
-		// The other half [c,d] remain disabled
-		await plugin.answerNo();
+		it("startBisect only considers already-enabled plugins as candidates", async () => {
+			const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b"]);
+			await plugin.startBisect();
 
-		const session = plugin.mode2Session.get("plugins")!;
-		const afterNo = plugin.getEnabledFromObsidian();
-		// After No, candidates should be the ones NOT in the previously tested half
-		// This could be 3 items (the other half from [a,b] + [c,d])
-		// and enabledUnderTest will be the first half of those 3 (which is 2)
-		expect(session.candidates.size).toBe(3);
-		expect(session.enabledUnderTest.size).toBe(2);
-		expect(afterNo.has("a")).toBe(false);
-		expect(afterNo.has("b")).toBe(false);
-		expect(afterNo.has("c")).toBe(true);
-		expect(afterNo.has("d")).toBe(true);
+			const session = plugin.mode2Session.get("plugins")!;
+			// c and d were disabled before start — they must never enter the candidate pool
+			expect(session.candidates.has("a")).toBe(true);
+			expect(session.candidates.has("b")).toBe(true);
+			expect(session.candidates.has("c")).toBe(false);
+			expect(session.candidates.has("d")).toBe(false);
+		});
+
+		it("answerNo button narrows candidates to the untested half", async () => {
+			const plugin = createPlugin(["a", "b", "c", "d"], ["a", "b", "c", "d"]);
+			await plugin.startBisect();
+			const testedHalf = new Set(plugin.mode2Session.get("plugins")!.enabledUnderTest);
+			await plugin.answerNo();
+
+			const session = plugin.mode2Session.get("plugins")!;
+			// candidates must shrink and must not overlap the half that was just tested
+			expect(session.candidates.size).toBeLessThan(4);
+			expect([...session.candidates].some((id) => testedHalf.has(id))).toBe(false);
 		});
 
 		it("answerNo button eliminates the current half and keeps bisecting", async () => {

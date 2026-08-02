@@ -510,9 +510,12 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	public async startBisect() {
-		const enabledCandidates = this.getIncludedSortedItems();
+		const includedItems = this.getIncludedSortedItems();
+		const enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		const enabledCandidates = includedItems.filter(item => enabledBeforeBisect.has(item.id));
+
 		if (enabledCandidates.length < 1) {
-			new Notice(`No ${this.getPluralLabel()} available for bisect.`);
+			new Notice(`No enabled ${this.getPluralLabel()} available for bisect.`);
 			return;
 		}
 
@@ -520,22 +523,20 @@ export default class divideAndConquer extends Plugin {
 		session.isRunning = true;
 		session.direction = "disable";
 		session.culpritId = undefined;
-		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		session.enabledBeforeBisect = enabledBeforeBisect;
 		session.candidates = new Set(enabledCandidates.map(item => item.id));
-		session.enabledUnderTest = new Set(
-			[...session.candidates].filter(id => session.enabledBeforeBisect?.has(id)),
-		);
 		this.resetBulkToggleModeState(this.mode);
 		// Starting bisect from settings should not immediately reload Obsidian.
 		this.skipNextReload = true;
-		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.enabledUnderTest]));
+		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
 		await this.applyTestState(session.candidates, session.enabledUnderTest);
 		await this.persistSession();
 	}
 
 	public async startBisectReverse() {
 		const includedItems = this.getIncludedSortedItems();
-		const disabledCandidates = includedItems.filter(item => !this.getEnabledFromObsidian().has(item.id));
+		const enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		const disabledCandidates = includedItems.filter(item => !enabledBeforeBisect.has(item.id));
 
 		if (disabledCandidates.length < 1) {
 			new Notice(`No disabled ${this.getPluralLabel()} available for reverse bisect.`);
@@ -546,7 +547,7 @@ export default class divideAndConquer extends Plugin {
 		session.isRunning = true;
 		session.direction = "enable";
 		session.culpritId = undefined;
-		session.enabledBeforeBisect = new Set(this.getEnabledFromObsidian());
+		session.enabledBeforeBisect = enabledBeforeBisect;
 		session.candidates = new Set(disabledCandidates.map(item => item.id));
 		session.enabledUnderTest = new Set(this.takeFirstHalf([...session.candidates]));
 		this.resetBulkToggleModeState(this.mode);
