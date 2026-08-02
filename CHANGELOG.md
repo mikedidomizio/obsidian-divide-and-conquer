@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0] - 2026-08-02
+- Add ability to bisect from all disabled plugins/snippets
+- Add ability to enable/disable all plugins/snippets
+
+## [2.1.1] - 2026-06-04
+- Fixes order of operations now happening in expected order
+
 ## [2.1.0] - 2026-05-29
 - Add "click to exclude" functionality to plugins/snippets list in settings.
 
@@ -14,7 +21,6 @@ with Obsidian's plugin naming guidelines.
 generation script.
 
 ## [2.0.2] - 2026-05-15
-
 - Improved the settings UI to better match native Obsidian components and styling.
 - Cleaned up warning and heading presentation for a clearer settings experience.
 - Simplified the build setup by removing an unnecessary package dependency.
