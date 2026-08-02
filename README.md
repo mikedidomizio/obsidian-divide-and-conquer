@@ -23,13 +23,29 @@ it is still quite cumbersome for power users who have 40, 50 or more plugins.
 plugins, to make the power user's life easier.
 
 ## Commands Added
-For either Plugin/Snippet:
-- Enable All - enable every plugin/snippet
-- Bisect Start - begin the bisect process by enabling one half
-and disabling the other
-- Bisect Yes - issue is still present with the currently enabled half;
+The same set of commands is available for both **Plugins** and **CSS Snippets**.
+
+### Bulk enable / disable
+- **Enable All** - enable everything, *including* excluded items
+- **Enable All Except Excluded** - enable everything that isn't on your
+ exclusion list
+- **Disable All** - disable everything, *including* excluded items
+- **Disable All Except Excluded** - disable everything that isn't on your
+ exclusion list
+
+### Bisecting
+You can bisect in either direction, depending on which state reproduces your
+issue:
+- **Bisect Start (Disable)** - the classic direction. Everything starts
+ enabled and DAC disables half. Use this when the problem is present with
+ everything on.
+- **Bisect Start (Enable)** - the reverse direction. Everything starts
+ disabled and DAC enables half of the disabled items. Use this when the
+ problem is absent with everything off and you want to enable your way
+ toward the culprit.
+- **Bisect Yes** - issue is still present with the currently enabled half;
  keep narrowing this side
-- Bisect No - issue is not present with the currently enabled half;
+- **Bisect No** - issue is not present with the currently enabled half;
  eliminate that side and keep narrowing the remaining candidates
 
 When only one possibility remains, DAC shows:
@@ -38,7 +54,7 @@ When only one possibility remains, DAC shows:
 
 (Note that to be able to fulfill its duty, this plugin will never disable
 itself. The Hot Reload Plugin will also never be disabled, to avoid
-interference for developers.)
+interference for developers — this holds even for "Disable All".)
 
 ## Settings
 The plugin/snippet exclusion is
