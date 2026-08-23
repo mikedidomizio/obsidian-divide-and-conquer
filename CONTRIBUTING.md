@@ -45,9 +45,9 @@ Your change will require tests if it adds new behavior or changes existing behav
 ### E2E tests
 
 The current unit tests run against a mocked Obsidian, which cannot tell us
-whether the plugin still works in a *real* Obsidian vault - and this plugin lives 
-on undocumented APIs that Obsidian changes between releases. The E2E tests fill
-that gap: they launch the real desktop app via
+whether the plugin still works in a *real* Obsidian vault - and this plugin
+lives on undocumented APIs that Obsidian changes between releases. The E2E tests
+fill that gap: they launch the real desktop app via
 [wdio-obsidian-service](https://jesse-r-s-hines.github.io/wdio-obsidian-service/),
 install the built plugin into a throwaway vault, and drive it.
 
@@ -93,8 +93,8 @@ later runs reuse it.
 - To run against something else without editing that file:
   `OBSIDIAN_VERSIONS="latest" npm run test:e2e`, or pin the Electron installer
   too with `OBSIDIAN_VERSIONS="<app>/<installer>"`.
-- `tests/e2e/vaults/simpleFakeVault` is the fixture vault: four inert plugins and 
-  four CSS snippets for the bulk commands and bisect to act on.
+- `tests/e2e/vaults/simpleFakeVault` is the fixture vault: four inert plugins
+  and four CSS snippets for the bulk commands and bisect to act on.
 - `tests/e2e/specs/helpers.ts` resets that vault between tests. It also excludes
   wdio-obsidian-service's own helper plugins from Divide and Conquer's bulk
   operations, so a "disable all" does not switch off the test harness.

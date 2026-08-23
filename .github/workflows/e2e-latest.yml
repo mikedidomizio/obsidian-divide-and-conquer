@@ -39,7 +39,7 @@ jobs:
       # No installer cache here, unlike e2e.yml. "latest" resolves to a
       # different release over time under a cache key that would not change, so
       # entries would turn over without ever being evicted - and this job runs
-      # once a day, where one download is cheaper than the cache budget.
+      # every third day, where one download is cheaper than the cache budget.
       #
       # Runs the whole suite, not just the undocumented-API check: an internal
       # can still be present while the DOM around it has moved, which is exactly
