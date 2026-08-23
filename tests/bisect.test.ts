@@ -564,9 +564,8 @@ describe("Button Actions: Two-button bulk-toggle visibility", () => {
 		checkboxWrapper.className = "checkbox-container";
 		container.appendChild(checkboxWrapper);
 
-		const fakeTab = { containerEl: container } as any;
 		(plugin as any)._mode = "plugins";
-		(plugin as any).attachContainerToggleListener("plugins", fakeTab);
+		(plugin as any).attachContainerToggleListener("plugins", container);
 
 		// Simulate clicking the toggle
 		checkboxWrapper.click();
@@ -581,12 +580,11 @@ describe("Button Actions: Two-button bulk-toggle visibility", () => {
 		checkboxWrapper.className = "checkbox-container";
 		container.appendChild(checkboxWrapper);
 
-		const fakeTab = { containerEl: container } as any;
 		(plugin as any)._mode = "plugins";
 
 		// Attach twice — should only count once
-		(plugin as any).attachContainerToggleListener("plugins", fakeTab);
-		(plugin as any).attachContainerToggleListener("plugins", fakeTab);
+		(plugin as any).attachContainerToggleListener("plugins", container);
+		(plugin as any).attachContainerToggleListener("plugins", container);
 
 		let callCount = 0;
 		const origHandle = (plugin as any).handleManualItemToggle.bind(plugin);

@@ -1,0 +1,2 @@
+/* Inert snippet fixture for Divide and Conquer end-to-end tests. */
+body { --dac-test-delta: 1; }

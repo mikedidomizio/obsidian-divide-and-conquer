@@ -1,0 +1,60 @@
+name: E2E (latest Obsidian)
+
+# The pinned suite in e2e.yml proves the plugin works on the versions we claim.
+# This proves nothing - it is a canary. Obsidian ships releases on its own
+# schedule, and this plugin is built on internals that carry no compatibility
+# promise, so the first warning that one of them moved should be a red run here
+# rather than a bug report.
+#
+# Deliberately not on pull_request: "latest" is a moving target, and a release
+# landing mid-review would fail PRs that changed nothing.
+
+on:
+  schedule:
+    # Every third day, off-peak. Obsidian releases roughly weekly, so this is
+    # mostly a no-op run that costs one download.
+    #
+    # Cron has no "every 3 days", only a step on the day-of-month field: this
+    # fires on the 1st, 4th, 7th ... 31st, so the gap across a month boundary
+    # is 1-4 days rather than 3. Close enough for a canary.
+    - cron: "0 6 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  E2E-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No installer cache here, unlike e2e.yml. "latest" resolves to a
+      # different release over time under a cache key that would not change, so
+      # entries would turn over without ever being evicted - and this job runs
+      # once a day, where one download is cheaper than the cache budget.
+      #
+      # Runs the whole suite, not just the undocumented-API check: an internal
+      # can still be present while the DOM around it has moved, which is exactly
+      # how the CSS snippets broke on 1.13.
+      - name: Run end-to-end tests against the latest Obsidian
+        run: npm run test:e2e:headless
+        env:
+          OBSIDIAN_VERSIONS: latest
+
+      # The resolved version is in the reporter banner, so a failure says which
+      # release broke it.
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-latest-logs
+          path: logs/
+          if-no-files-found: ignore

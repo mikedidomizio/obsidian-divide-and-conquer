@@ -1,4 +1,4 @@
-import {Notice, Plugin, SettingsTab} from "obsidian";
+import {Notice, Plugin, SettingsSubPage, SettingsTab} from "obsidian";
 import type {Composed, Func, Mode} from "./util";
 import {
 	DACSettings,
@@ -9,14 +9,10 @@ import {
 import {
 	Modes,
 	compose,
-	getSnippetItems,
-	makeArray,
 	queryText,
-	removeSetupDebugNotice,
-	simpleCalc
+	removeSetupDebugNotice
 } from "./util";
 import {around} from "monkey-around";
-import tinycolor from "tinycolor2";
 
 const CSS_DELAY = 200;
 
@@ -164,17 +160,21 @@ const UIButtons: DACButton[] = [
 const numberOfTextElements = 1;
 const numberOfButtonsAndTextElements = UIButtons.length + numberOfTextElements;
 
+/**
+ * Where our controls go on a page, and how they get there. Obsidian gives us three shapes of
+ * page to attach to; resolve that once rather than branching at every step.
+ */
+type ControlsHost = {
+	/** What we insert into, and so the only place a stale copy can be hiding. */
+	root: HTMLElement;
+	place: (controls: HTMLElement) => void;
+};
+
 export default class divideAndConquer extends Plugin {
 	declare settings: typeof DEFAULT_SETTINGS;
 	manifests = this.app.plugins.manifests;
-	/**
-	 * Used to one-time skip reloading/reinitializing triggered by the user.
-	 * @private
-	 */
+	/** Skips the next reload/reinitialize, once. */
 	private skipNextReload = false;
-	enabledColor: string | null = null;
-	disabledColor: string | null = null;
-	getItemEls!: () => Element[];
 	getAllItems!: () => Set<NameNID>;
 	getEnabledFromObsidian!: () => Set<string>;
 	enableItem!: (item: string) => Promise<unknown>;
@@ -197,6 +197,19 @@ export default class divideAndConquer extends Plugin {
 	mode2Session: Map<Mode, BisectSession> = new Map();
 	private mode2BulkToggleMode: Map<Mode, BulkToggleModeState> = new Map();
 
+	/** Undoes our wrapper on the settings sub-page the user currently has open, if any. */
+	private uninstallSubPageHook: (() => void) | null = null;
+
+	/** Modes we have already complained about, so a re-render does not spam the console. */
+	private warnedAboutMissingHost: Set<Mode> = new Set();
+
+	/**
+	 * Every controls root we have put into a settings page, so unload can take them back out —
+	 * Obsidian leaves a plugin's DOM in place. References rather than a later query, because on
+	 * 1.13 the settings can be in a window this plugin can no longer reach once unloaded.
+	 */
+	private controlsRoots: Set<HTMLElement> = new Set();
+
 	get controls() {
 		return this.mode2Controls.get(this.mode) ?? [];
 	}
@@ -214,6 +227,7 @@ export default class divideAndConquer extends Plugin {
 	}
 
 	override onunload(): void {
+		this.removeControls();
 		this.saveData().catch(() => {
 			throw new Error('Could not save data');
 		});
@@ -267,21 +281,31 @@ export default class divideAndConquer extends Plugin {
 		});
 
 		for (const [mode, tab] of this.mode2Tab.entries()) {
-			this.register(around(tab, {display: this.overrideDisplay.bind(this, mode, tab)}));
+			this.mode2Refresh.set(mode, () => {
+				this.setMode(mode);
+				void tab.reload().then(() => this.rerenderTab(tab));
+			});
+
+			// Obsidian 1.13 renders its own tabs through renderTab(); display() survives only as
+			// the compatibility path for third-party tabs. Hook whichever this build calls.
+			this.register(around(tab, {display: this.overrideRender.bind(this, mode, tab)}));
+			if (typeof tab.renderTab === "function") {
+				const renderingTab = tab as SettingsTab & { renderTab: (...args: unknown[]) => void };
+				this.register(around(renderingTab, {renderTab: this.overrideRender.bind(this, mode, tab)}));
+			}
 		}
 
-		this.getItemEls = () => {
-			switch (this.mode) {
-				case "plugins": {
-					const installedContainer = this.tab?.containerEl.find(".installed-plugins-container");
-					return installedContainer ? makeArray(installedContainer.children) : [];
-				}
-				case "snippets":
-					return getSnippetItems(this.tab as SettingsTab);
-				default:
-					throw new Error(`Unknown mode`);
-			}
-		};
+		// Obsidian 1.13 also moved the CSS snippets off the Appearance page and onto a sub-page
+		// you click into. That page is a throwaway object with its own container, so neither the
+		// Appearance tab nor the hooks above ever see it — follow the navigation instead.
+		const settingModal = this.app.setting;
+		if (typeof settingModal.openPage === "function") {
+			const navigableModal = settingModal as typeof settingModal & {
+				openPage: (page: SettingsSubPage) => void;
+			};
+			this.register(around(navigableModal, {openPage: this.overrideOpenPage.bind(this)}));
+			this.register(() => this.stopFollowingSubPage());
+		}
 
 		this.getAllItems = () => {
 			switch (this.mode) {
@@ -340,11 +364,6 @@ export default class divideAndConquer extends Plugin {
 		};
 
 		this.addCommands();
-		this.app.workspace.onLayoutReady(() => {
-			const appContainer = activeDocument.getElementsByClassName("app-container").item(0) as HTMLDivElement;
-			this.enabledColor ??= tinycolor(simpleCalc(appContainer.getCssPropertyValue("--checkbox-color"))).spin(180).toHexString();
-			this.disabledColor ??= tinycolor(this.enabledColor).darken(35).toHexString();
-		});
 	}
 
 	public override async loadData() {
@@ -357,11 +376,21 @@ export default class divideAndConquer extends Plugin {
 		await super.saveData(this.settings);
 	}
 
-	private addControls() {
-		const heading = this.getControlHeading();
-		const legacyControlContainer = this.getControlContainer();
-		if (!heading && !legacyControlContainer) {
+	private addControls(subPageContainer?: HTMLElement) {
+		const host = subPageContainer
+			? this.getSubPageControlsHost(subPageContainer)
+			: this.getTabControlsHost();
+		if (!host) {
+			this.warnIfControlsHaveNowhereToGo(subPageContainer ?? this.tab?.containerEl);
 			return;
+		}
+
+		// Obsidian reconciles its own setting items in place instead of emptying the container,
+		// so a re-render can leave our previous controls behind. Ours are a foreign node in its
+		// tree; clear them out before adding them back.
+		for (const stale of Array.from(host.root.querySelectorAll(".dac-controls-root"))) {
+			this.controlsRoots.delete(stale as HTMLElement);
+			stale.remove();
 		}
 
 		if (!this.mode2Controls.has(this.mode)) {
@@ -426,18 +455,85 @@ export default class divideAndConquer extends Plugin {
 		}
 
 		controlsRoot.appendChild(buttonsRow);
-		if (heading?.parentElement) {
-			heading.parentElement.insertBefore(controlsRoot, heading.nextSibling);
+		this.controlsRoots.add(controlsRoot);
+		host.place(controlsRoot);
+	}
+
+	/** Takes our controls back off whatever settings pages they were added to. */
+	private removeControls() {
+		for (const root of this.controlsRoots) {
+			root.remove();
+		}
+		this.controlsRoots.clear();
+		this.mode2Controls.clear();
+	}
+
+	/** A settings tab's own page: our controls sit directly under its heading. */
+	private getTabControlsHost(): ControlsHost | undefined {
+		const heading = this.getControlHeading();
+		const headingParent = heading?.parentElement;
+		if (heading && headingParent) {
+			return {
+				root: headingParent,
+				place: (controls) => headingParent.insertBefore(controls, heading.nextSibling),
+			};
+		}
+
+		const controlContainer = this.getControlContainer() ?? heading?.querySelector(".setting-item-control");
+		if (!controlContainer) {
+			return undefined;
+		}
+		return {
+			root: controlContainer as HTMLElement,
+			place: (controls) => controlContainer.appendChild(controls),
+		};
+	}
+
+	/**
+	 * A 1.13 sub-page has no heading of its own — the title sits in the modal titlebar — so the
+	 * controls go at the top of its group, above the search and the items.
+	 */
+	private getSubPageControlsHost(container: HTMLElement): ControlsHost {
+		const group = container.querySelector<HTMLElement>(".setting-group") ?? container;
+		return {
+			root: group,
+			place: (controls) => group.insertBefore(controls, group.firstChild),
+		};
+	}
+
+	/**
+	 * A rearranged settings page breaks us quietly: the hook still runs, it just finds nowhere
+	 * to put anything. Say so once, in the console.
+	 *
+	 * Only when the page is actually listing the items we control, though. A page listing none
+	 * of them is simply not ours — on 1.13 that describes Appearance, whose snippets moved.
+	 */
+	private warnIfControlsHaveNowhereToGo(container: HTMLElement | undefined) {
+		if (!container || this.warnedAboutMissingHost.has(this.mode)) {
+			return;
+		}
+		if (!this.pageIsListingOurItems(container)) {
 			return;
 		}
 
-		if (legacyControlContainer) {
-			legacyControlContainer.appendChild(controlsRoot);
-			return;
-		}
+		this.warnedAboutMissingHost.add(this.mode);
+		console.warn(
+			`Divide and Conquer: the "${this.tab?.heading}" settings page is listing ${this.mode}, ` +
+			"but there is nowhere to attach the bulk controls, so they will not appear. " +
+			"Obsidian's settings layout has most likely changed.",
+		);
+	}
 
-		const controlContainer = heading?.querySelector(".setting-item-control");
-		controlContainer?.appendChild(controlsRoot);
+	/** Does this page show at least one of the plugins or snippets we manage? */
+	private pageIsListingOurItems(container: HTMLElement) {
+		const names = [...this.getAllItems()].map((item) => item.name).filter(Boolean);
+
+		// Obsidian appends the version and author to a plugin's name, so match the start of the
+		// row rather than the whole of it.
+		return Array.from(container.querySelectorAll(".setting-item-name")).some((row) => {
+			const rowName = row.textContent?.trim() ?? "";
+			return names.some((name) => rowName.startsWith(name));
+		});
 	}
 
 	private addCommands() {
@@ -787,11 +883,7 @@ export default class divideAndConquer extends Plugin {
 		await this.app.plugins.initialize();
 	}
 
-	/**
-	 * To be called when a plugin/snippet manually toggled
-	 * @param mode
-	 * @private
-	 */
+	/** Called when the user toggles a single plugin or snippet by hand. */
 	private handleManualItemToggle(mode: Mode) {
 		const bulkToggleMode = this.getBulkToggleModeState(mode);
 
@@ -809,12 +901,7 @@ export default class divideAndConquer extends Plugin {
 		this.updateControlState();
 	}
 
-	/**
-	 * Whether to skip a reload or not.
-	 * skipNextReload changed to false when called.
-	 * @private
-	 * @return true if should skip, false if should not skip.
-	 */
+	/** Whether to skip this reload, clearing the token as it reads it. */
 	private consumeReloadSkipToken() {
 		if (!this.skipNextReload) {
 			return false;
@@ -979,30 +1066,83 @@ export default class divideAndConquer extends Plugin {
 		text.setText(`The ${this.getPluralLabel()} below are enabled. Are you still having issues?`);
 	}
 
-	private overrideDisplay(mode: Mode, tab: SettingsTab, old: (...args: unknown[]) => void) {
-		return (function display(this: divideAndConquer, ...args: unknown[]) {
+	/**
+	 * Wraps whichever method renders a settings tab, so our controls go back on afterwards.
+	 *
+	 * Deliberately does not reload: `reload()` ends in didChange(), which is what makes Obsidian
+	 * re-render the tab, so reloading from here spins forever. That belongs to `refreshTab`,
+	 * which runs after our own bulk operations.
+	 */
+	private overrideRender(mode: Mode, tab: SettingsTab, old: (...args: unknown[]) => void) {
+		return (function render(this: divideAndConquer, ...args: unknown[]) {
 			this.setMode(mode);
-			this.refreshTab = () => {
-				this.setMode(mode);
-				void tab.reload().then(() => {
-					old.apply(tab, args);
-					this.addControls();
-					this.colorizeIgnoredToggles();
-					this.attachContainerToggleListener(mode, tab);
-				});
-			};
-			this.refreshTab?.();
-		}).bind(this, tab);
+			old.apply(tab, args);
+			this.addControls();
+			this.attachContainerToggleListener(mode, tab.containerEl);
+		}).bind(this);
 	}
 
 	/**
-	 * Attach a single delegated click listener on the tab container so that clicking ANY
-	 * plugin/snippet toggle resets the bulk-toggle mode state on the bulk-toggle buttons.
-	 * Using delegation means the listener survives tab re-renders — we only need to attach
-	 * it once per tab (guarded by a data attribute on the container element).
+	 * Wraps navigation into a sub-page, so we can follow that page's rendering the way we follow
+	 * a tab's. Obsidian rebuilds the page object per visit, so drop the last wrapper as we go.
 	 */
-	private attachContainerToggleListener(mode: Mode, tab: SettingsTab) {
-		const container = tab.containerEl;
+	private overrideOpenPage(old: (page: SettingsSubPage) => void) {
+		const settingModal = this.app.setting;
+		return (function openPage(this: divideAndConquer, page: SettingsSubPage) {
+			const mode = this.getModeForHeading(page.title);
+			this.stopFollowingSubPage();
+			if (mode !== undefined) {
+				this.uninstallSubPageHook = around(page, {
+					display: this.overrideSubPageRender.bind(this, mode, page),
+				});
+			}
+			old.call(settingModal, page);
+		}).bind(this);
+	}
+
+	/** The sub-page equivalent of {@link overrideRender}, and it must not reload either. */
+	private overrideSubPageRender(mode: Mode, page: SettingsSubPage, old: (...args: unknown[]) => void) {
+		return (function display(this: divideAndConquer, ...args: unknown[]) {
+			this.setMode(mode);
+			old.apply(page, args);
+			this.addControls(page.containerEl);
+			this.attachContainerToggleListener(mode, page.containerEl);
+		}).bind(this);
+	}
+
+	private stopFollowingSubPage() {
+		this.uninstallSubPageHook?.();
+		this.uninstallSubPageHook = null;
+	}
+
+	/** Which of our modes, if any, owns the tab or sub-page carrying this title. */
+	private getModeForHeading(title: string | undefined) {
+		if (!title) {
+			return undefined;
+		}
+		for (const [mode, tab] of this.mode2Tab.entries()) {
+			if (tab.heading === title) {
+				return mode;
+			}
+		}
+		return undefined;
+	}
+
+	/** Ask the tab to draw itself again, whichever era of settings tab it is. */
+	private rerenderTab(tab: SettingsTab) {
+		if (typeof tab.update === "function") {
+			tab.update();
+			return;
+		}
+		tab.display();
+	}
+
+	/**
+	 * One delegated click listener per container, so toggling any plugin or snippet resets the
+	 * bulk-toggle state. Delegation means it survives re-renders; the data attribute keeps us
+	 * from attaching twice.
+	 */
+	private attachContainerToggleListener(mode: Mode, container: HTMLElement) {
 		if (!container || container.dataset.dacToggleListenerAttached === "true") {
 			return;
 		}
@@ -1013,38 +1153,6 @@ export default class divideAndConquer extends Plugin {
 				this.handleManualItemToggle(mode);
 			}
 		});
-	}
-
-	private colorizeIgnoredToggles() {
-		const name2Toggle = this.createToggleMap(this.getItemEls());
-		const included = new Set([...(this.getIncludedItems())].map(m => m.name));
-
-		for (const [name, toggle] of name2Toggle) {
-			if (!included.has(name)) {
-				const colorToggle = () => {
-					if (toggle.classList.contains("is-enabled")) {
-						toggle.style.backgroundColor = this.enabledColor ?? "";
-					} else {
-						toggle.style.backgroundColor = this.disabledColor ?? "";
-					}
-				};
-				colorToggle();
-				toggle.addEventListener("click", colorToggle);
-			}
-		}
-	}
-
-	private createToggleMap(items: Element[]) {
-		const name2Toggle = new Map<string, HTMLDivElement>();
-		for (let i = 0; i < items.length; i++) {
-			const child = items[i];
-			const name = (child.querySelector(".setting-item-name") as HTMLDivElement)?.innerText;
-			const toggle = child.querySelector(".setting-item-control")?.querySelector(".checkbox-container") as HTMLDivElement;
-			if (name && toggle) {
-				name2Toggle.set(name, toggle);
-			}
-		}
-		return name2Toggle;
 	}
 
 	private wrapCall(mode: Mode, key: keyof divideAndConquer) {

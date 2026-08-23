@@ -11,3 +11,12 @@ dist/
 
 # coverage
 /coverage
+
+# e2e (wdio-obsidian-service)
+.obsidian-cache/
+logs/
+.env
+
+# ...but the e2e test vault's fixture plugins are checked in
+!tests/e2e/vaults/**/main.js
+!tests/e2e/vaults/**/data.json
