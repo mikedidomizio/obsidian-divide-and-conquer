@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"moduleResolution": "bundler",
+		"allowJs": true,
+		"types": [
+			"node",
+			"@wdio/globals/types",
+			"@wdio/mocha-framework",
+			"wdio-obsidian-service"
+		]
+	},
+	"include": ["src/**/*.ts", "tests/e2e/**/*.ts", "tests/e2e/**/*.mjs", "wdio.conf.mts"],
+	"exclude": [],
+
+	"$schema": "https://json.schemastore.org/tsconfig"
+}

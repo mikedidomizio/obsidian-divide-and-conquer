@@ -1,0 +1,9 @@
+{
+	"id": "dac-test-gamma",
+	"name": "DAC Test gamma",
+	"version": "1.0.0",
+	"minAppVersion": "1.2.0",
+	"description": "Inert fixture plugin for Divide and Conquer end-to-end tests.",
+	"author": "Divide and Conquer tests",
+	"isDesktopOnly": false
+}

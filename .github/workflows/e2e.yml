@@ -1,0 +1,53 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# E2E is by far the most expensive job here, so let a new push supersede the run
+# it replaces. Pushes to main still run to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  E2E:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Obsidian installers are ~0.5GB each, so keep them between runs. The key
+      # covers every download: each app version in obsidian-versions.mjs pins its
+      # own installer and chromedriver, so exact pins cannot drift.
+      #
+      # Deliberately no restore-keys - they would seed a changed pin set with
+      # installers we no longer test, and nothing prunes them. A few pin changes
+      # and the entry passes the 10GB repo limit and starts getting evicted.
+      - name: Cache Obsidian installers
+        uses: actions/cache@v4
+        with:
+          path: .obsidian-cache
+          key: obsidian-cache-${{ runner.os }}-${{ hashFiles('tests/e2e/obsidian-versions.mjs') }}
+
+      # Obsidian is an Electron app and needs a display server.
+      - name: Run end-to-end tests
+        run: npm run test:e2e:headless
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: logs/
+          if-no-files-found: ignore

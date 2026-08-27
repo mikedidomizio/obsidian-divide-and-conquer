@@ -18,11 +18,14 @@
 		"noPropertyAccessFromIndexSignature": false,
 		"isolatedModules": true,
 		"esModuleInterop": true,
+		"resolveJsonModule": true,
+		"allowJs": true,
 		"importHelpers": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true
 	},
 	"include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
+	"exclude": ["tests/e2e"],
 
 	"$schema": "https://json.schemastore.org/tsconfig"
 }

@@ -1,10 +1,18 @@
 // DOCS https://knip.dev/overview/configuration
 {
 	"$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
-	"entry": ["src/main.ts"],
+	"entry": ["src/main.ts", "wdio.conf.mts", "tests/e2e/specs/**/*.e2e.ts"],
 	"project": ["**/*.ts"],
 	"ignoreDependencies": [
 		"@biomejs/biome", // used only in pre-commit hook / task
-		"markdownlint-cli" // used only in pre-commit hook / task
+		"markdownlint-cli", // used only in pre-commit hook / task
+		// wdio resolves these by name from wdio.conf.mts ("mocha" framework,
+		// "obsidian" service and reporter) rather than by import
+		"@types/mocha",
+		"@wdio/local-runner",
+		"@wdio/mocha-framework",
+		"mocha",
+		"wdio-obsidian-reporter",
+		"wdio-obsidian-service"
 	]
 }

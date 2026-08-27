@@ -1,7 +1,32 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import divideAndConquer from "../src/main";
 import { DEFAULT_SETTINGS } from "../src/settings";
 import { Modes } from "../src/util";
+
+// From the project root, which is where vitest runs - `import.meta.url` is not a
+// file URL under happy-dom.
+const E2E_SPEC_DIR = join(process.cwd(), "tests", "e2e", "specs");
+
+/**
+ * Every command id the end-to-end suite actually invokes.
+ *
+ * Read out of the spec sources rather than imported: the E2E specs run under
+ * WebdriverIO against a real Obsidian, so vitest cannot load them.
+ */
+function commandsExercisedByE2E(): Set<string> {
+	const ids = new Set<string>();
+
+	for (const file of readdirSync(E2E_SPEC_DIR).filter((name) => name.endsWith(".e2e.ts"))) {
+		const source = readFileSync(join(E2E_SPEC_DIR, file), "utf8");
+		for (const [, id] of source.matchAll(/runDacCommand\("([^"]+)"\)/g)) {
+			ids.add(id);
+		}
+	}
+
+	return ids;
+}
 
 function createPluginForCommands() {
 	const enabledSet = new Set<string>();
@@ -125,6 +150,26 @@ describe("Command Registration", () => {
 		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
 		expect(ids).toContain("snippet-start-bisect");
 		expect(ids).toContain("snippet-start-bisect-reverse");
+	});
+
+	/**
+	 * Unit tests prove a command is registered and wired to the right method;
+	 * only the E2E suite proves it does the right thing to a real vault. This is
+	 * the ratchet that stops a command from being added with neither.
+	 */
+	it("every registered command is exercised somewhere in the end-to-end suite", () => {
+		const plugin = createPluginForCommands();
+		const ids: string[] = (plugin as any).registeredCommands.map((c: any) => c.id);
+		const exercised = commandsExercisedByE2E();
+
+		expect(ids.filter((id) => !exercised.has(id))).toEqual([]);
+	});
+
+	it("the end-to-end suite does not invoke commands that no longer exist", () => {
+		const plugin = createPluginForCommands();
+		const ids = new Set<string>((plugin as any).registeredCommands.map((c: any) => c.id));
+
+		expect([...commandsExercisedByE2E()].filter((id) => !ids.has(id))).toEqual([]);
 	});
 
 	it("re-calling addCommands still produces 16 unique IDs (no mutation side-effects)", () => {
